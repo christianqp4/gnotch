@@ -4,6 +4,8 @@ import SwiftUI
 struct NotchShape: Shape {
     var topRadius: CGFloat
     var bottomRadius: CGFloat
+    /// Open outline (no top edge), used to draw the progress stroke along the notch.
+    var closed = true
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(topRadius, bottomRadius) }
@@ -26,7 +28,7 @@ struct NotchShape: Shape {
         p.addLine(to: CGPoint(x: rect.maxX - tr, y: rect.minY + tr))
         p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY),
                        control: CGPoint(x: rect.maxX - tr, y: rect.minY))
-        p.closeSubpath()
+        if closed { p.closeSubpath() }
         return p
     }
 }

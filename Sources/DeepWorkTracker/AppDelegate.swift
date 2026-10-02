@@ -47,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(ClosureMenuItem("Log & Heatmap", key: "l") { [weak self] in self?.showDashboard() })
 
+        let wings = ClosureMenuItem("Show Time Beside Notch") { [weak self] in self?.notch.state.showWings.toggle() }
+        wings.state = notch.state.showWings ? .on : .off
+        menu.addItem(wings)
+
         let login = ClosureMenuItem("Launch at Login") { Self.toggleLaunchAtLogin() }
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)

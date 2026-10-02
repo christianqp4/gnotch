@@ -10,7 +10,8 @@ struct NotchRootView: View {
 
     var body: some View {
         let expanded = state.isExpanded(phase: engine.phase)
-        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, notch: state.notchSize)
+        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, notch: state.notchSize,
+                                    wings: state.showWings)
         let shape = NotchShape(topRadius: NotchLayout.ear, bottomRadius: expanded ? 24 : 10)
         // Without a physical notch, an idle collapsed bar would just be a black blob.
         let hidden = !expanded && engine.phase == .idle && !state.hasNotch
@@ -21,6 +22,9 @@ struct NotchRootView: View {
                 .shadow(color: .black.opacity(expanded ? 0.45 : 0), radius: 14, y: 6)
             content(expanded: expanded, size: size)
                 .clipShape(shape)
+            if !expanded, engine.isActive {
+                OutlineProgress(engine: engine)
+            }
         }
         .frame(width: size.width, height: size.height)
         .opacity(hidden ? 0 : 1)
@@ -47,7 +51,7 @@ struct NotchRootView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             }
             .transition(.opacity.animation(.easeOut(duration: 0.18)))
-        } else if engine.phase != .idle {
+        } else if engine.phase != .idle, state.showWings {
             CollapsedActivity(engine: engine, notch: state.notchSize)
                 .transition(.opacity)
         }
@@ -87,13 +91,10 @@ struct CollapsedActivity: View {
                     Image(systemName: "pause.fill")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.orange)
-                } else if engine.goal == nil {
+                } else {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(Heat.base)
-                } else {
-                    ProgressRing(progress: engine.progress, tint: engine.isOvertime ? Heat.base : .white, lineWidth: 2.5)
-                        .frame(width: 14, height: 14)
                 }
             }
             .frame(width: NotchLayout.wing, alignment: .leading)
@@ -163,17 +164,30 @@ struct IdleView: View {
                 .buttonStyle(.plain)
             }
 
-            HStack {
-                let streak = store.streak()
-                Text(streak > 0 ? "\(streak)-day streak" : "No streak yet. Today's a good day.")
-                Spacer()
+            HStack(alignment: .bottom) {
                 Button(action: openLog) {
-                    Label("Log & heatmap", systemImage: "square.grid.3x3.fill")
+                    MiniHeatmap(store: store)
                 }
                 .buttonStyle(.plain)
+                .help("Open log & heatmap")
+                Spacer()
+                VStack(alignment: .trailing, spacing: 5) {
+                    let streak = store.streak()
+                    let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+                    Text(streak > 0 ? "\(streak)-day streak" : "No streak yet")
+                        .foregroundStyle(.primary)
+                    Text("This week \(Fmt.hm(store.total(since: weekStart)))")
+                        .monospacedDigit()
+                    Button(action: openLog) {
+                        Label("Log & heatmap", systemImage: "arrow.up.right")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
             }
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.secondary)
         }
     }
 }
@@ -310,5 +324,67 @@ struct FinishView: View {
         Text(s.uppercased())
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.secondary)
+    }
+}
+
+/// Progress drawn along the notch outline: down the left side, across the bottom, up the right.
+struct OutlineProgress: View {
+    @ObservedObject var engine: TimerEngine
+
+    var body: some View {
+        let paused = engine.phase == .paused
+        let overtime = engine.isOvertime
+        // Open-ended blocks fill the outline once per hour.
+        let progress = engine.goal == nil
+            ? engine.elapsed.truncatingRemainder(dividingBy: 3600) / 3600
+            : (overtime ? 1 : engine.progress)
+        let tint: Color = paused ? .orange : Heat.base
+        let pulse = overtime && !paused && Int(engine.elapsed) % 2 == 0
+
+        NotchShape(topRadius: NotchLayout.ear, bottomRadius: 10, closed: false)
+            .trim(from: 0, to: max(0.004, progress))
+            .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            .shadow(color: tint.opacity(0.7), radius: 3)
+            .opacity(pulse ? 0.45 : 1)
+            .animation(.linear(duration: 1), value: progress)
+            .animation(.easeInOut(duration: 1), value: pulse)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The last 24 weeks, in the same colors and metric as the dashboard heatmap.
+struct MiniHeatmap: View {
+    @ObservedObject var store: SessionStore
+    var weeks = 24
+    var cell: CGFloat = 8
+    var gap: CGFloat = 2.5
+    @AppStorage("heatMetric") private var metricRaw = HeatMetric.score.rawValue
+
+    var body: some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: today)?.start ?? today
+        let first = cal.date(byAdding: .weekOfYear, value: -(weeks - 1), to: weekStart)!
+        let stats = store.dayStats()
+        let metric = HeatMetric(rawValue: metricRaw) ?? .score
+
+        HStack(spacing: gap) {
+            ForEach(0..<weeks, id: \.self) { w in
+                VStack(spacing: gap) {
+                    ForEach(0..<7, id: \.self) { d in
+                        let day = cal.date(byAdding: .day, value: w * 7 + d, to: first)!
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Heat.color(metric.level(stats[day])))
+                            .frame(width: cell, height: cell)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 2)
+                                    .stroke(Color.white.opacity(day == today ? 0.85 : 0), lineWidth: 1)
+                            )
+                            .opacity(day > today ? 0 : 1)
+                    }
+                }
+            }
+        }
+        .contentShape(Rectangle())
     }
 }

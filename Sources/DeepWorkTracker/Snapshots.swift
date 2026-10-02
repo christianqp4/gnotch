@@ -15,11 +15,12 @@ enum Snapshots {
         seed(store)
 
         let notch = CGSize(width: 185, height: 32)
-        func notchShot(_ name: String, hovering: Bool, setup: (TimerEngine) -> Void) {
+        func notchShot(_ name: String, hovering: Bool, wings: Bool = true, setup: (TimerEngine) -> Void) {
             let engine = TimerEngine(store: store, persistsState: false)
             let state = NotchState()
             state.notchSize = notch
             state.hovering = hovering
+            state.showWings = wings
             setup(engine)
             let view = ZStack(alignment: .top) {
                 LinearGradient(colors: [Color(red: 0.35, green: 0.45, blue: 0.6), Color(red: 0.75, green: 0.6, blue: 0.55)],
@@ -33,6 +34,9 @@ enum Snapshots {
 
         notchShot("1-collapsed-running", hovering: false) { e in
             e.task = "Thesis chapter 3"; e.start(minutes: 50); e.simulate(elapsed: 18 * 60 + 25)
+        }
+        notchShot("1b-collapsed-outline-only", hovering: false, wings: false) { e in
+            e.start(minutes: 50); e.simulate(elapsed: 30 * 60)
         }
         notchShot("2-idle-expanded", hovering: true) { _ in }
         notchShot("3-running-expanded", hovering: true) { e in

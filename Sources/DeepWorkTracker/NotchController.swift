@@ -9,6 +9,10 @@ final class NotchState: ObservableObject {
     @Published var peek = false
     @Published var notchSize = CGSize(width: 185, height: 32)
     @Published var hasNotch = true
+    /// Show the time and icon in wings beside the notch, or only the outline progress.
+    @Published var showWings = UserDefaults.standard.object(forKey: "showTimeBesideNotch") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showWings, forKey: "showTimeBesideNotch") }
+    }
 
     func isExpanded(phase: TimerEngine.Phase) -> Bool {
         phase == .finishing || hovering || peek
@@ -22,14 +26,14 @@ enum NotchLayout {
     /// Width of each wing beside the notch while a block runs collapsed.
     static let wing: CGFloat = 78
 
-    static func size(phase: TimerEngine.Phase, expanded: Bool, notch: CGSize) -> CGSize {
+    static func size(phase: TimerEngine.Phase, expanded: Bool, notch: CGSize, wings: Bool = true) -> CGSize {
         if phase == .finishing {
             return CGSize(width: 480, height: notch.height + 318)
         }
         if expanded {
-            return CGSize(width: 460, height: notch.height + (phase == .idle ? 138 : 104))
+            return CGSize(width: 460, height: notch.height + (phase == .idle ? 178 : 104))
         }
-        if phase == .idle {
+        if phase == .idle || !wings {
             return CGSize(width: notch.width + 2 * ear, height: notch.height)
         }
         return CGSize(width: notch.width + 2 * ear + 2 * wing, height: notch.height)
@@ -152,7 +156,8 @@ final class NotchController {
 
     private func visibleRect(expanded: Bool) -> NSRect {
         guard let screen else { return .zero }
-        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, notch: state.notchSize)
+        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, notch: state.notchSize,
+                                    wings: state.showWings)
         return NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height,
                       width: size.width, height: size.height)
     }

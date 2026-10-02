@@ -2,13 +2,15 @@
 
 A macOS notch timer for deep work blocks, with a log of every block, intensity ratings, notes on how it felt, and a GitHub-style heatmap of the year.
 
-<img src="docs/notch-collapsed.png" width="620" alt="Collapsed notch while a block runs">
+<img src="docs/notch-collapsed.png" width="620" alt="Collapsed notch: progress traced along the notch outline">
+<img src="docs/notch-idle.png" width="620" alt="Expanded notch with mini heatmap">
 <img src="docs/notch-running.png" width="620" alt="Expanded notch while a block runs">
 
 ## What it does
 
 - **Lives in the notch.** Hover the notch to expand it. Pick a block length (25 / 50 / 90 / 120 min, or ∞ open-ended), name what you're working on, start.
-- **Live activity while you work.** Collapsed, the notch grows two small wings: a progress ring on the left, the countdown on the right. Orange when paused, green once you pass your goal (it chimes and keeps counting overtime, so it never breaks your flow).
+- **Progress traced along the notch.** While a block runs, a line draws itself along the notch outline: down the left side, across the bottom, up the right. Green while running, orange when paused, pulsing once you pass your goal (it chimes and keeps counting overtime, so it never breaks your flow). Open-ended blocks fill the outline once per hour. The countdown sits beside the notch; turn that off in the menu (*Show Time Beside Notch*) for outline only.
+- **Mini heatmap in the notch.** The last 24 weeks, streak, and this week's total, right under the Start button.
 - **Log every block.** When you finish, the notch asks for:
   - **Intensity** 1–5 (Shallow · Light · Focused · Deep · Flow)
   - **Sensations** as quick tags (Flow, Energized, Calm, Clear-headed, Distracted, Tired, Restless, Breakthrough)
