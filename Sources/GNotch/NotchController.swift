@@ -24,6 +24,11 @@ enum NotchPage: String, CaseIterable, Identifiable {
 
 enum DropZone { case clipboard, vision }
 
+struct NotchBadge: Equatable {
+    var icon: String
+    var text: String
+}
+
 @MainActor
 final class NotchState: ObservableObject {
     @Published var hovering = false
@@ -37,6 +42,8 @@ final class NotchState: ObservableObject {
     @Published var notchSize = CGSize(width: 185, height: 32)
     @Published var hasNotch = true
     @Published var toast: String?
+    /// Brief message in the collapsed notch's wings, e.g. after a screenshot is copied.
+    @Published var badge: NotchBadge?
     /// Bumped to ask the visible page to focus its text field.
     @Published var focusToken = 0
 
@@ -82,6 +89,9 @@ enum NotchLayout {
     static func size(phase: TimerEngine.Phase, expanded: Bool, state: NotchState) -> CGSize {
         let notch = state.notchSize
         guard expanded else {
+            if state.badge != nil {
+                return CGSize(width: notch.width + 2 * ear + 2 * wing, height: notch.height)
+            }
             if phase == .idle || !state.showWings {
                 return CGSize(width: notch.width + 2 * ear, height: notch.height)
             }
@@ -103,7 +113,7 @@ enum NotchLayout {
             }
         case .clipboard:
             return state.large ? CGSize(width: 760, height: notch.height + 520)
-                               : CGSize(width: 540, height: notch.height + 350)
+                               : CGSize(width: 560, height: notch.height + 400)
         case .vision:
             return state.large ? CGSize(width: 860, height: notch.height + 560)
                                : CGSize(width: 540, height: notch.height + 350)
@@ -137,7 +147,8 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
 
     init(engine: TimerEngine, store: SessionStore, clips: ClipboardStore, vision: VisionStore,
-         ambient: AmbientPlayer, openLog: @escaping () -> Void, addPast: @escaping () -> Void) {
+         shots: ScreenshotLibrary, ambient: AmbientPlayer,
+         openLog: @escaping () -> Void, addPast: @escaping () -> Void) {
         self.engine = engine
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                            backing: .buffered, defer: false)
@@ -154,7 +165,7 @@ final class NotchController {
 
         let state = self.state
         let root = NotchRootView(
-            engine: engine, store: store, clips: clips, vision: vision, state: state, ambient: ambient,
+            engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state, ambient: ambient,
             openLog: openLog, addPast: addPast,
             collapse: { [weak self] in self?.collapse() },
             onDrop: { zone, providers in
@@ -212,6 +223,14 @@ final class NotchController {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
             self?.state.peek = false
             self?.updateMouseIgnoring()
+        }
+    }
+
+    func showBadge(icon: String, text: String, seconds: Double = 2) {
+        let badge = NotchBadge(icon: icon, text: text)
+        state.badge = badge
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            if self?.state.badge == badge { self?.state.badge = nil }
         }
     }
 

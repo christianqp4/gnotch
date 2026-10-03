@@ -1,10 +1,12 @@
-# DeepWork Tracker
+# GNotch
 
-A macOS notch app with three pages that swap in place:
+The Gears notch app for macOS. One notch, three pages that swap in place:
 
-- **Timer**: deep work blocks with a log of every block, intensity ratings, notes on how it felt, and a GitHub-style heatmap of the year
-- **Clipboard**: history of everything you copy (text, images, files), with pins and search
-- **Vision Board**: images and quotes you want in front of you
+- **Deep Work**: a timer for deep work blocks with a log of every block, intensity ratings, notes on how it felt, and a GitHub-style heatmap of the year
+- **Clipboard**: history of everything you copy (text, images, files), with pins and search, plus **Ubuntu-style screenshots** (every screenshot is instantly on your clipboard)
+- **Vision Board**: images and quotes as home-screen-style widgets
+
+*GNotch was called "DeepWork Tracker" until v0.4; data and settings migrate automatically.*
 
 <img src="docs/notch-collapsed.png" width="620" alt="Collapsed notch: progress traced along the notch outline">
 <img src="docs/notch-idle.png" width="620" alt="Expanded notch with mini heatmap">
@@ -55,31 +57,41 @@ The small icons left of the notch switch pages; while a block runs, the timer ic
 
 <img src="docs/notch-clipboard.png" width="560" alt="Clipboard page">
 
-- Everything you copy is kept: text, links, images, files. The last 10 show at a glance; **Show all** opens the full history (500 items, 80 images).
+- Everything you copy is kept: text, links, images, files, laid out as a packed grid: short text takes one column, long text and wide images take more. The last 10 show at a glance; **Show all** opens the full history (500 items, 80 images).
+- Filter by **All · Text · Images · Files · Screenshots**.
 - **Click** an item to copy it again. **Drag** it out to drop it into any app. Right-click: pin, open link, show in Finder, add to Vision Board, delete.
 - **Pin** favourites so they stay at the top and never expire.
 - **Search** everything, including file paths and the app it came from.
 - **Drag anything onto the notch** → drop on *Clipboard*.
 - **Password managers are skipped**: anything marked concealed or transient ([nspasteboard.org](http://nspasteboard.org) convention, used by 1Password, Bitwarden, KeePassXC…), and anything copied while a password manager is in front.
-- Pause or clear the history from the menu bar icon. History is stored only on this Mac, unencrypted, in `~/Library/Application Support/DeepWorkTracker/Clipboard/`.
+- Pause or clear the history from the menu bar icon. History is stored only on this Mac, unencrypted, in `~/Library/Application Support/GNotch/Clipboard/`.
+
+### Screenshots, the Ubuntu way
+
+<img src="docs/notch-screenshots.png" width="560" alt="Screenshots in the clipboard page">
+
+Take a screenshot (⇧⌘3 / ⇧⌘4 / ⇧⌘5) and it's **already on your clipboard**: press ⌘V anywhere. It also goes into the history, and **Clipboard → Screenshots** shows every screenshot in your screenshot folder to copy or drag again.
+
+macOS waits ~5 s (floating thumbnail) before saving a screenshot; menu bar → **Instant Screenshots** or [`scripts/screenshots.sh enable`](scripts/screenshots.sh) removes the wait. Full details: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
 ## Vision Board
 
 <img src="docs/notch-vision.png" width="560" alt="Vision board page">
 <img src="docs/notch-drop.png" width="560" alt="Drop targets while dragging onto the notch">
 
-A free canvas. Drag images (or image files) onto the notch and drop on *Vision Board*, add a note (a goal, a quote), or **Paste** what's on the clipboard.
+Widgets like on an iPhone or Android home screen. Drag images (or image files) onto the notch and drop on *Vision Board*, add a note (a goal, a quote), or **Paste** what's on the clipboard.
 
-- **Drag** a tile to move it anywhere. Click to select it, then drag the white corner handle to **resize**.
-- **Double-click** to see it big. Right-click: bring to front, copy image, show in Finder, remove.
-- **Tidy** snaps everything back into a grid.
+- **Drag** a widget: the others move out of the way, and nothing ever overlaps.
+- Click to select, then drag the white corner handle to **resize**; it snaps to the 6-column grid (or right-click → *Size*).
+- **Double-click** to see it big. Right-click: copy image, show in Finder, remove.
+- **Tidy** resets sizes and puts the newest first.
 
 ## Build & install
 
 Requires macOS 14+ and Swift 5.9+. Xcode's Command Line Tools are enough; you don't need full Xcode.
 
 ```bash
-./scripts/build-app.sh            # builds build/DeepWork Tracker.app
+./scripts/build-app.sh            # builds build/GNotch.app
 ./scripts/build-app.sh --install  # also copies it to /Applications and launches it
 ```
 
@@ -92,7 +104,7 @@ There's no Dock icon. Look for the 🧠 icon in the menu bar. *Launch at Login* 
 Everything is local, in one human-readable file:
 
 ```
-~/Library/Application Support/DeepWorkTracker/sessions.json
+~/Library/Application Support/GNotch/sessions.json
 ```
 
 ```json
@@ -113,8 +125,11 @@ Everything is local, in one human-readable file:
 ## Development
 
 ```
-Sources/DeepWorkTracker/
+Sources/GNotch/
   AppDelegate.swift      menu bar item, dashboard window, app menu, shortcuts
+  ScreenshotLibrary.swift  screenshot folder watcher, auto-copy, screenshot settings
+  Sounds.swift           event sounds + generated focus sounds
+  TimerLarge.swift       big timer page
   NotchController.swift  the floating panel over the notch: hover, pin, click-through, Esc
   NotchRoot.swift        page switching, top band tabs, drop targets
   ClipboardStore.swift   pasteboard watcher, history storage, drop parsing
@@ -133,7 +148,7 @@ Sources/DeepWorkTracker/
 Render every UI state to PNGs without touching your real data (useful for checking UI changes):
 
 ```bash
-swift build -c release && DEEPWORK_SNAPSHOT=/tmp/dw-shots .build/release/DeepWorkTracker
+swift build -c release && GNOTCH_SNAPSHOT=/tmp/gnotch-shots .build/release/GNotch
 ```
 
 Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns`

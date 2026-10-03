@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "DeepWorkTracker",
+    name: "GNotch",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "DeepWorkTracker", path: "Sources/DeepWorkTracker")
+        .executableTarget(name: "GNotch", path: "Sources/GNotch")
     ]
 )

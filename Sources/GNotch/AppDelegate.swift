@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let clips = ClipboardStore()
     private let vision = VisionStore()
     private let ambient = AmbientPlayer()
+    private let shots = ScreenshotLibrary()
     private let router = DashboardRouter()
     private var phaseWatch: AnyCancellable?
     private var notch: NotchController!
@@ -19,9 +20,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, ambient: ambient,
+        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, shots: shots, ambient: ambient,
                                 openLog: { [weak self] in self?.showDashboard() },
                                 addPast: { [weak self] in self?.showDashboard(addBlock: true) })
+        // Ubuntu-style: a new screenshot is on the clipboard right away, and in the history.
+        shots.onNewScreenshot = { [weak self] url in
+            guard let self else { return }
+            self.clips.addScreenshot(url, copy: self.shots.autoCopy)
+            if self.shots.autoCopy { self.notch.showBadge(icon: "camera.fill", text: "Copied") }
+        }
         phaseWatch = engine.$phase.sink { [ambient] phase in ambient.timerRunning(phase == .running) }
 
         // ⌃⌥D timer · ⌃⌥V clipboard · ⌃⌥B vision board
@@ -30,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKeys.register(keyCode: kVK_ANSI_B, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .vision) }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "DeepWork Tracker")
+        let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "GNotch")
         image?.isTemplate = true
         statusItem.button?.image = image
         let menu = NSMenu()
@@ -72,6 +79,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let sounds = ClosureMenuItem("Timer Sounds") { Sounds.enabled.toggle() }
         sounds.state = Sounds.enabled ? .on : .off
         menu.addItem(sounds)
+        let autoCopy = ClosureMenuItem("Screenshots → Clipboard") { [shots] in shots.autoCopy.toggle() }
+        autoCopy.state = shots.autoCopy ? .on : .off
+        autoCopy.toolTip = "Like Ubuntu: every new screenshot is copied, ready for ⌘V"
+        menu.addItem(autoCopy)
+        let instant = ClosureMenuItem("Instant Screenshots (no floating thumbnail)") {
+            ScreenshotSettings.setThumbnail(!ScreenshotSettings.thumbnailEnabled)
+        }
+        instant.state = ScreenshotSettings.thumbnailEnabled ? .off : .on
+        instant.toolTip = "macOS waits ~5 s for its floating thumbnail before saving. Turn it off to copy instantly."
+        menu.addItem(instant)
+        menu.addItem(ClosureMenuItem("Screenshot Setup Guide") {
+            NSWorkspace.shared.open(URL(string: "https://github.com/christianqp4/gnotch/blob/main/docs/SCREENSHOTS.md")!)
+        })
+        menu.addItem(.separator())
         let pause = ClosureMenuItem("Pause Clipboard History") { [clips] in clips.paused.toggle() }
         pause.state = clips.paused ? .on : .off
         menu.addItem(pause)
@@ -94,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
         menu.addItem(.separator())
-        menu.addItem(ClosureMenuItem("Quit DeepWork Tracker", key: "q") { NSApp.terminate(nil) })
+        menu.addItem(ClosureMenuItem("Quit GNotch", key: "q") { NSApp.terminate(nil) })
     }
 
     private static func toggleLaunchAtLogin() {
@@ -119,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 940, height: 780),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable],
                              backing: .buffered, defer: false)
-            w.title = "DeepWork Tracker"
+            w.title = "GNotch · Deep Work"
             w.isReleasedWhenClosed = false
             w.contentView = NSHostingView(rootView: DashboardView(store: store, router: router))
             w.center()
@@ -138,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Quit DeepWork Tracker", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit GNotch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 

@@ -115,7 +115,7 @@ final class AmbientPlayer: ObservableObject {
             try engine.start()
             self.engine = engine
         } catch {
-            NSLog("DeepWork: couldn't start audio: \(error)")
+            NSLog("GNotch: couldn't start audio: \(error)")
         }
     }
 }

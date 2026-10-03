@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Dev tool: renders every notch state and the dashboard to PNGs with sample data.
-/// `DEEPWORK_SNAPSHOT=/some/dir ./.build/release/DeepWorkTracker`
+/// `GNOTCH_SNAPSHOT=/some/dir ./.build/release/GNotch`
 /// Uses a temporary data file and never touches the real log or saved timer.
 @MainActor
 enum Snapshots {
@@ -10,16 +10,34 @@ enum Snapshots {
         _ = NSApplication.shared
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("deepwork-snapshot-\(UUID()).json")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("gnotch-snapshot-\(UUID()).json")
         let store = SessionStore(fileURL: file)
         seed(store)
 
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("deepwork-snapshot-\(UUID())")
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("gnotch-snapshot-\(UUID())")
         let clips = ClipboardStore(dir: tmp.appendingPathComponent("clips"), monitor: false)
         let vision = VisionStore(dir: tmp.appendingPathComponent("vision"))
         seedClipboard(clips)
         seedVision(vision)
         let ambient = AmbientPlayer()
+        let shotsDir = tmp.appendingPathComponent("shots")
+        try? FileManager.default.createDirectory(at: shotsDir, withIntermediateDirectories: true)
+        for (i, (colors, label, w, h)) in [([NSColor.systemBlue, .systemTeal], "Figma", 1600, 1000),
+                                            ([.systemPink, .systemOrange], "Chat", 900, 900),
+                                            ([.systemGreen, .systemMint], "Terminal", 1800, 700),
+                                            ([.systemIndigo, .systemPurple], "Slides", 1440, 900),
+                                            ([.systemGray, .darkGray], "Error", 700, 1000)].enumerated() {
+            let url = shotsDir.appendingPathComponent("Screenshot \(i).png")
+            let img = NSImage(size: NSSize(width: w, height: h), flipped: false) { rect in
+                NSGradient(colors: colors)!.draw(in: rect, angle: 30)
+                NSAttributedString(string: label, attributes: [.font: NSFont.boldSystemFont(ofSize: 120),
+                                                               .foregroundColor: NSColor.white]).draw(at: NSPoint(x: 60, y: 60))
+                return true
+            }
+            try? img.pngData()?.write(to: url)
+            setxattr(url.path, "com.apple.metadata:kMDItemIsScreenCapture", "1", 1, 0, 0)
+        }
+        let shots = ScreenshotLibrary(folder: shotsDir, watch: false)
 
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
@@ -41,7 +59,7 @@ enum Snapshots {
                 LinearGradient(colors: [Color(red: 0.35, green: 0.45, blue: 0.6), Color(red: 0.75, green: 0.6, blue: 0.55)],
                                startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color.white.opacity(0.25)).frame(height: notch.height)
-                NotchRootView(engine: engine, store: store, clips: clips, vision: vision, state: state,
+                NotchRootView(engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state,
                               ambient: ambient, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
             }
             render(view, size: CGSize(width: 900, height: notch.height + 600), dark: true,
@@ -78,6 +96,9 @@ enum Snapshots {
         notchShot("13-timer-large-running", hovering: true, large: true) { e in
             e.task = "Library: thesis reading"; e.start(minutes: 90); e.simulate(elapsed: 47 * 60 + 12)
         }
+        UserDefaults.standard.set("Screenshots", forKey: "clipboardFilter")
+        notchShot("14-screenshots", hovering: true, page: .clipboard) { _ in }
+        UserDefaults.standard.removeObject(forKey: "clipboardFilter")
         notchShot("11-drop", hovering: true, dragging: .vision) { _ in }
 
         render(SessionEditor(draft: SessionEditor.blank(), isNew: true, others: store.sessions,
@@ -127,7 +148,7 @@ enum Snapshots {
                           URL(fileURLWithPath: "/Users/you/Desktop/plan.pdf")]), source: "Finder")
         clips.add(.image(swatch([.systemTeal, .systemIndigo], "Screenshot")), source: "Screenshot")
         clips.add(.text("Deep work is the ability to focus without distraction on a cognitively demanding task."), source: "Safari")
-        clips.add(.text("https://github.com/christianqp4/deepwork-tracker"), source: "Arc")
+        clips.add(.text("https://github.com/christianqp4/gnotch"), source: "Arc")
         clips.add(.text("func toggle(page: NotchPage) {\n    state.page = page\n}"), source: "Xcode")
         clips.add(.text("Meeting moved to 16:30, bring the Gears HUD prototype"), source: "Messages")
         let pinned = clips.items.first { $0.text?.hasPrefix("Deep work") == true }!

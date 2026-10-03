@@ -4,12 +4,30 @@ import ImageIO
 import UniformTypeIdentifiers
 
 enum AppPaths {
+    /// ~/Library/Application Support/GNotch. Data from the "DeepWork Tracker" days is moved here once.
     static let base: URL = {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("DeepWorkTracker", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let url = support.appendingPathComponent("GNotch", isDirectory: true)
+        let old = support.appendingPathComponent("DeepWorkTracker", isDirectory: true)
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: url.path), fm.fileExists(atPath: old.path) {
+            try? fm.moveItem(at: old, to: url)
+        }
+        try? fm.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }()
+}
+
+enum Migration {
+    /// Bring settings (and a running timer) over from the old bundle id.
+    static func run() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: "migratedFromDeepWorkTracker") else { return }
+        if let old = d.persistentDomain(forName: "com.christianqp4.DeepWorkTracker") {
+            for (k, v) in old where d.object(forKey: k) == nil { d.set(v, forKey: k) }
+        }
+        d.set(true, forKey: "migratedFromDeepWorkTracker")
+    }
 }
 
 /// Something read from a pasteboard or a drop.
@@ -62,7 +80,7 @@ struct ClipItem: Codable, Identifiable, Hashable {
 }
 
 /// Clipboard history: watches the system pasteboard, stores text, images and files.
-/// Lives in ~/Library/Application Support/DeepWorkTracker/Clipboard/.
+/// Lives in ~/Library/Application Support/GNotch/Clipboard/.
 @MainActor
 final class ClipboardStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
@@ -162,6 +180,15 @@ final class ClipboardStore: ObservableObject {
             trim()
         }
         save()
+    }
+
+    /// A screenshot file: optionally onto the clipboard, and into history either way.
+    func addScreenshot(_ url: URL, copy: Bool) {
+        guard let image = NSImage(contentsOf: url) else { return }
+        if copy, ScreenshotLibrary.copyToPasteboard(url) {
+            lastChangeCount = NSPasteboard.general.changeCount
+        }
+        add(.image(image), source: "Screenshot")
     }
 
     // MARK: Actions

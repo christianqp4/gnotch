@@ -1,6 +1,6 @@
 import Foundation
 
-/// Persists sessions as JSON in ~/Library/Application Support/DeepWorkTracker/sessions.json.
+/// Persists sessions as JSON in ~/Library/Application Support/GNotch/sessions.json.
 @MainActor
 final class SessionStore: ObservableObject {
     @Published private(set) var sessions: [DeepWorkSession] = []
@@ -15,10 +15,7 @@ final class SessionStore: ObservableObject {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("DeepWorkTracker", isDirectory: true)
-            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-            self.fileURL = base.appendingPathComponent("sessions.json")
+            self.fileURL = AppPaths.base.appendingPathComponent("sessions.json")
         }
         load()
     }

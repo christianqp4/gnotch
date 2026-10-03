@@ -7,6 +7,7 @@ struct NotchRootView: View {
     @ObservedObject var store: SessionStore
     @ObservedObject var clips: ClipboardStore
     @ObservedObject var vision: VisionStore
+    @ObservedObject var shots: ScreenshotLibrary
     @ObservedObject var state: NotchState
     @ObservedObject var ambient: AmbientPlayer
     let openLog: () -> Void
@@ -54,6 +55,7 @@ struct NotchRootView: View {
         .animation(spring, value: state.page)
         .animation(spring, value: state.large)
         .animation(spring, value: state.dragging)
+        .animation(spring, value: state.badge)
         .animation(.easeOut(duration: 0.2), value: state.toast)
         .environment(\.colorScheme, .dark)
     }
@@ -69,7 +71,7 @@ struct NotchRootView: View {
                     } else {
                         switch state.visiblePage(phase: engine.phase) {
                         case .timer: timerPage
-                        case .clipboard: ClipboardPage(clips: clips, vision: vision, state: state)
+                        case .clipboard: ClipboardPage(clips: clips, vision: vision, shots: shots, state: state)
                         case .vision: VisionPage(vision: vision, state: state)
                         }
                     }
@@ -82,6 +84,9 @@ struct NotchRootView: View {
                 .id(state.dragging ? "drop" : state.visiblePage(phase: engine.phase).rawValue)
             }
             .transition(.opacity.animation(.easeOut(duration: 0.18)))
+        } else if let badge = state.badge {
+            BadgeWings(badge: badge, notch: state.notchSize)
+                .transition(.opacity)
         } else if engine.phase != .idle, state.showWings {
             CollapsedActivity(engine: engine, notch: state.notchSize)
                 .transition(.opacity)
@@ -247,5 +252,31 @@ struct NotchDropDelegate: DropDelegate {
 
     private func update(_ info: DropInfo) {
         state.dropZone = info.location.x < width / 2 ? .clipboard : .vision
+    }
+}
+
+/// A short message shown beside the collapsed notch.
+struct BadgeWings: View {
+    let badge: NotchBadge
+    let notch: CGSize
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Image(systemName: badge.icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Heat.base)
+                .frame(width: NotchLayout.wing, alignment: .leading)
+                .padding(.leading, 14)
+            Color.clear.frame(width: notch.width - 14 * 2 + 4)
+            Text(badge.text)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: NotchLayout.wing, alignment: .trailing)
+                .padding(.trailing, 14)
+        }
+        .padding(.horizontal, NotchLayout.ear - 2)
+        .frame(height: notch.height)
     }
 }

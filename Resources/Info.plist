@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>DeepWork Tracker</string>
+    <string>GNotch</string>
     <key>CFBundleDisplayName</key>
-    <string>DeepWork Tracker</string>
+    <string>GNotch</string>
     <key>CFBundleIdentifier</key>
-    <string>com.christianqp4.DeepWorkTracker</string>
+    <string>com.christianqp4.GNotch</string>
     <key>CFBundleExecutable</key>
-    <string>DeepWorkTracker</string>
+    <string>GNotch</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
