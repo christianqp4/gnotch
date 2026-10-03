@@ -271,6 +271,7 @@ struct ClipboardPage: View {
 
 /// Packs items into full rows, in order. Each item asks for `span` of `columns` units;
 /// when it doesn't fit, it shrinks into what's left of the row, so there are no holes.
+/// No item takes a whole row on its own, so every row shows at least two (unless only one is left).
 struct PackedGrid<Item: Identifiable, Tile: View>: View {
     let items: [Item]
     let columns: Int
@@ -309,7 +310,7 @@ struct PackedGrid<Item: Identifiable, Tile: View>: View {
         var row: [Cell] = []
         var left = columns
         for item in items {
-            let s = max(1, min(columns, span(item)))
+            let s = max(1, min(max(1, columns - 1), span(item)))
             let take = row.isEmpty ? s : min(s, left)
             row.append(Cell(item: item, span: take))
             left -= take
@@ -408,6 +409,7 @@ struct ClipTile: View {
                         .lineLimit(large ? 4 : 3)
                 }
                 .foregroundStyle(item.isLink ? Color(red: 0.5, green: 0.75, blue: 1) : .white)
+                .padding(.trailing, item.pinned ? 18 : 0)
                 Spacer(minLength: 0)
                 metaText
             }
