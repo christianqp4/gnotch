@@ -2,20 +2,70 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum NotchPage: String, CaseIterable, Identifiable {
+    case timer, clipboard, vision
+
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .timer: return "flame.fill"
+        case .clipboard: return "doc.on.clipboard"
+        case .vision: return "sparkles"
+        }
+    }
+    var title: String {
+        switch self {
+        case .timer: return "Deep work timer (⌃⌥D)"
+        case .clipboard: return "Clipboard (⌃⌥V)"
+        case .vision: return "Vision board (⌃⌥B)"
+        }
+    }
+}
+
+enum DropZone { case clipboard, vision }
+
 @MainActor
 final class NotchState: ObservableObject {
     @Published var hovering = false
     /// Temporary expansion, e.g. when the goal is reached.
     @Published var peek = false
+    /// Stays open until Esc, the close button, a click elsewhere, or the shortcut again.
+    @Published var pinned = false
+    /// Something is being dragged over the notch.
+    @Published var dragging = false
+    @Published var dropZone: DropZone?
     @Published var notchSize = CGSize(width: 185, height: 32)
     @Published var hasNotch = true
+    @Published var toast: String?
+    /// Bumped to ask the visible page to focus its text field.
+    @Published var focusToken = 0
+
+    @Published var page = NotchPage(rawValue: UserDefaults.standard.string(forKey: "notchPage") ?? "") ?? .timer {
+        didSet { UserDefaults.standard.set(page.rawValue, forKey: "notchPage") }
+    }
+    /// Bigger layout for the clipboard and vision board pages.
+    @Published var large = UserDefaults.standard.bool(forKey: "notchLarge") {
+        didSet { UserDefaults.standard.set(large, forKey: "notchLarge") }
+    }
     /// Show the time and icon in wings beside the notch, or only the outline progress.
     @Published var showWings = UserDefaults.standard.object(forKey: "showTimeBesideNotch") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showWings, forKey: "showTimeBesideNotch") }
     }
 
     func isExpanded(phase: TimerEngine.Phase) -> Bool {
-        phase == .finishing || hovering || peek
+        phase == .finishing || hovering || peek || pinned || dragging
+    }
+
+    /// The finish form always wins, whatever page was open.
+    func visiblePage(phase: TimerEngine.Phase) -> NotchPage {
+        phase == .finishing ? .timer : page
+    }
+
+    func flash(_ message: String) {
+        toast = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            if self?.toast == message { self?.toast = nil }
+        }
     }
 }
 
@@ -25,18 +75,35 @@ enum NotchLayout {
     static let ear: CGFloat = 8
     /// Width of each wing beside the notch while a block runs collapsed.
     static let wing: CGFloat = 78
+    /// The transparent panel is this big (plus the notch height); the shape never exceeds it.
+    static let canvas = CGSize(width: 900, height: 600)
 
-    static func size(phase: TimerEngine.Phase, expanded: Bool, notch: CGSize, wings: Bool = true) -> CGSize {
-        if phase == .finishing {
-            return CGSize(width: 480, height: notch.height + 318)
+    @MainActor
+    static func size(phase: TimerEngine.Phase, expanded: Bool, state: NotchState) -> CGSize {
+        let notch = state.notchSize
+        guard expanded else {
+            if phase == .idle || !state.showWings {
+                return CGSize(width: notch.width + 2 * ear, height: notch.height)
+            }
+            return CGSize(width: notch.width + 2 * ear + 2 * wing, height: notch.height)
         }
-        if expanded {
-            return CGSize(width: 460, height: notch.height + (phase == .idle ? 178 : 104))
+        if state.dragging {
+            return CGSize(width: 560, height: notch.height + 150)
         }
-        if phase == .idle || !wings {
-            return CGSize(width: notch.width + 2 * ear, height: notch.height)
+        switch state.visiblePage(phase: phase) {
+        case .timer:
+            switch phase {
+            case .finishing: return CGSize(width: 480, height: notch.height + 318)
+            case .idle: return CGSize(width: 460, height: notch.height + 178)
+            case .running, .paused: return CGSize(width: 480, height: notch.height + 104)
+            }
+        case .clipboard:
+            return state.large ? CGSize(width: 760, height: notch.height + 520)
+                               : CGSize(width: 540, height: notch.height + 350)
+        case .vision:
+            return state.large ? CGSize(width: 860, height: notch.height + 560)
+                               : CGSize(width: 540, height: notch.height + 350)
         }
-        return CGSize(width: notch.width + 2 * ear + 2 * wing, height: notch.height)
     }
 }
 
@@ -59,11 +126,14 @@ final class NotchController {
     private let engine: TimerEngine
     private var screen: NSScreen?
     private var monitors: [Any] = []
-    private var fallbackTimer: Timer?
+    private var pollTimer: Timer?
     private var collapseWork: DispatchWorkItem?
+    /// After an explicit close, ignore hover until the pointer leaves the notch.
+    private var suppressHover = false
     private var cancellables = Set<AnyCancellable>()
 
-    init(engine: TimerEngine, store: SessionStore, openLog: @escaping () -> Void) {
+    init(engine: TimerEngine, store: SessionStore, clips: ClipboardStore, vision: VisionStore,
+         openLog: @escaping () -> Void) {
         self.engine = engine
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                            backing: .buffered, defer: false)
@@ -78,8 +148,28 @@ final class NotchController {
         panel.acceptsMouseMovedEvents = true
         panel.ignoresMouseEvents = true
 
-        let host = FirstMouseHostingView(rootView: NotchRootView(
-            engine: engine, store: store, state: state, openLog: openLog))
+        let state = self.state
+        let root = NotchRootView(
+            engine: engine, store: store, clips: clips, vision: vision, state: state,
+            openLog: openLog,
+            collapse: { [weak self] in self?.collapse() },
+            onDrop: { zone, providers in
+                PasteboardReader.read(providers: providers) { contents in
+                    guard !contents.isEmpty else { return }
+                    switch zone {
+                    case .clipboard:
+                        clips.addDropped(contents)
+                        state.page = .clipboard
+                        state.flash("Added to clipboard")
+                    case .vision:
+                        let n = vision.add(contents)
+                        state.page = .vision
+                        state.flash(n > 0 ? "Added to vision board" : "Only images & text go on the board")
+                    }
+                    state.pinned = true
+                }
+            })
+        let host = FirstMouseHostingView(rootView: root)
         host.sizingOptions = []
         panel.contentView = host
 
@@ -92,31 +182,25 @@ final class NotchController {
             MainActor.assumeIsolated { self?.reposition() }
         }
 
-        let handler: (NSEvent) -> Void = { [weak self] _ in
-            MainActor.assumeIsolated { self?.handleMouse() }
-        }
-        if let m = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: handler) {
-            monitors.append(m)
-        }
-        if let m = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { e in
-            handler(e)
-            return e
-        }) {
-            monitors.append(m)
-        }
-        // Safety net for cases where no move event arrives (fast exits, space switches).
-        let t = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
+        installMonitors()
+
+        // Polling the pointer is cheap and keeps working during drags, when move events stop.
+        let t = Timer(timeInterval: 0.12, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.handleMouse() }
         }
         RunLoop.main.add(t, forMode: .common)
-        fallbackTimer = t
+        pollTimer = t
 
         engine.onGoalReached = { [weak self] in self?.peek(seconds: 5) }
         engine.$phase
+            .removeDuplicates()
+            .scan((TimerEngine.Phase.idle, TimerEngine.Phase.idle)) { ($0.1, $1) }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] phase in self?.phaseChanged(phase) }
+            .sink { [weak self] old, new in self?.phaseChanged(from: old, to: new) }
             .store(in: &cancellables)
     }
+
+    // MARK: Public
 
     func peek(seconds: Double) {
         state.peek = true
@@ -125,6 +209,30 @@ final class NotchController {
             self?.state.peek = false
             self?.updateMouseIgnoring()
         }
+    }
+
+    /// Shortcut behaviour: open pinned on `page`, or close if it's already showing.
+    func toggle(page: NotchPage) {
+        if state.pinned, state.page == page {
+            collapse()
+            return
+        }
+        state.page = page
+        state.pinned = true
+        updateMouseIgnoring()
+        panel.makeKey()
+        state.focusToken += 1
+    }
+
+    func collapse() {
+        guard engine.phase != .finishing else { return }
+        state.pinned = false
+        state.peek = false
+        state.hovering = false
+        suppressHover = visibleRect(expanded: false).insetBy(dx: -8, dy: -6).contains(NSEvent.mouseLocation)
+            || visibleRect(expanded: true).contains(NSEvent.mouseLocation)
+        updateMouseIgnoring()
+        dropKeyIfNeeded()
     }
 
     // MARK: Geometry
@@ -148,29 +256,85 @@ final class NotchController {
             state.notchSize = CGSize(width: 200, height: menuBar > 10 ? menuBar : 28)
         }
 
-        let w: CGFloat = 620
-        let h = state.notchSize.height + 380
+        let w = NotchLayout.canvas.width
+        let h = state.notchSize.height + NotchLayout.canvas.height
         panel.setFrame(NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h),
                        display: true)
     }
 
     private func visibleRect(expanded: Bool) -> NSRect {
         guard let screen else { return .zero }
-        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, notch: state.notchSize,
-                                    wings: state.showWings)
+        let size = NotchLayout.size(phase: engine.phase, expanded: expanded, state: state)
         return NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height,
                       width: size.width, height: size.height)
     }
 
-    // MARK: Hover
+    // MARK: Mouse & keyboard
+
+    private func installMonitors() {
+        let move: (NSEvent) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleMouse() }
+        }
+        if let m = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: move) {
+            monitors.append(m)
+        }
+        if let m = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { e in
+            move(e)
+            return e
+        }) {
+            monitors.append(m)
+        }
+
+        // Clicking another app closes a pinned notch.
+        if let m = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.state.pinned else { return }
+                if !self.visibleRect(expanded: true).contains(NSEvent.mouseLocation) { self.collapse() }
+            }
+        }) {
+            monitors.append(m)
+        }
+
+        // Clicking inside the notch keeps it open; clicking our other windows closes it.
+        if let m = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown], handler: { [weak self] e in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if e.window === self.panel {
+                    if self.state.isExpanded(phase: self.engine.phase) { self.state.pinned = true }
+                } else if self.state.pinned {
+                    self.collapse()
+                }
+            }
+            return e
+        }) {
+            monitors.append(m)
+        }
+
+        // Esc closes.
+        if let m = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] e in
+            guard e.keyCode == 53 else { return e }
+            let windowNumber = e.windowNumber
+            let handled = MainActor.assumeIsolated { () -> Bool in
+                guard let self, windowNumber == self.panel.windowNumber else { return false }
+                self.collapse()
+                return true
+            }
+            return handled ? nil : e
+        }) {
+            monitors.append(m)
+        }
+    }
 
     private func handleMouse() {
         let p = NSEvent.mouseLocation
         let expanded = state.isExpanded(phase: engine.phase)
         let rect = visibleRect(expanded: expanded)
         let hit = expanded ? rect.insetBy(dx: -14, dy: -14) : rect.insetBy(dx: -8, dy: -6)
+        let inside = hit.contains(p)
 
-        if hit.contains(p) {
+        if suppressHover {
+            if !inside, !visibleRect(expanded: true).contains(p) { suppressHover = false }
+        } else if inside {
             collapseWork?.cancel()
             collapseWork = nil
             if !state.hovering { state.hovering = true }
@@ -202,10 +366,18 @@ final class NotchController {
         panel.orderFrontRegardless()
     }
 
-    private func phaseChanged(_ phase: TimerEngine.Phase) {
-        if phase == .finishing {
+    private func phaseChanged(from old: TimerEngine.Phase, to new: TimerEngine.Phase) {
+        switch new {
+        case .finishing:
             panel.makeKey()
-        } else {
+        case .running where old == .idle:
+            // Started a block: get out of the way.
+            state.pinned = false
+            dropKeyIfNeeded()
+        case .idle where old == .finishing:
+            state.pinned = false
+            dropKeyIfNeeded()
+        default:
             dropKeyIfNeeded()
         }
         updateMouseIgnoring()

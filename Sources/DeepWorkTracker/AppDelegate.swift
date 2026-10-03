@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import ServiceManagement
 import SwiftUI
 
@@ -6,13 +7,21 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = SessionStore()
     private lazy var engine = TimerEngine(store: store)
+    private let clips = ClipboardStore()
+    private let vision = VisionStore()
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
     private var dashboard: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        notch = NotchController(engine: engine, store: store, openLog: { [weak self] in self?.showDashboard() })
+        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision,
+                                openLog: { [weak self] in self?.showDashboard() })
+
+        // ⌃⌥D timer · ⌃⌥V clipboard · ⌃⌥B vision board
+        HotKeys.register(keyCode: kVK_ANSI_D, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .timer) }
+        HotKeys.register(keyCode: kVK_ANSI_V, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .clipboard) }
+        HotKeys.register(keyCode: kVK_ANSI_B, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .vision) }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "DeepWork Tracker")
@@ -45,7 +54,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(ClosureMenuItem("Log the finished block…") { [weak self] in self?.notch.peek(seconds: 1) })
         }
         menu.addItem(.separator())
+        for (page, title, key) in [(NotchPage.timer, "Open Timer", "d"), (.clipboard, "Open Clipboard", "v"),
+                                   (.vision, "Open Vision Board", "b")] {
+            let item = ClosureMenuItem(title, key: key) { [weak self] in self?.notch.toggle(page: page) }
+            item.keyEquivalentModifierMask = [.control, .option]
+            menu.addItem(item)
+        }
         menu.addItem(ClosureMenuItem("Log & Heatmap", key: "l") { [weak self] in self?.showDashboard() })
+        menu.addItem(.separator())
+
+        let pause = ClosureMenuItem("Pause Clipboard History") { [clips] in clips.paused.toggle() }
+        pause.state = clips.paused ? .on : .off
+        menu.addItem(pause)
+        menu.addItem(ClosureMenuItem("Clear Clipboard History…") { [clips] in
+            let alert = NSAlert()
+            alert.messageText = "Clear clipboard history?"
+            alert.informativeText = "Pinned items are kept."
+            alert.addButton(withTitle: "Clear")
+            alert.addButton(withTitle: "Cancel")
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn { clips.clearHistory() }
+        })
+        menu.addItem(.separator())
 
         let wings = ClosureMenuItem("Show Time Beside Notch") { [weak self] in self?.notch.state.showWings.toggle() }
         wings.state = notch.state.showWings ? .on : .off

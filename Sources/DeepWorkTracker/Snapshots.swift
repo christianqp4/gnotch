@@ -14,21 +14,36 @@ enum Snapshots {
         let store = SessionStore(fileURL: file)
         seed(store)
 
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("deepwork-snapshot-\(UUID())")
+        let clips = ClipboardStore(dir: tmp.appendingPathComponent("clips"), monitor: false)
+        let vision = VisionStore(dir: tmp.appendingPathComponent("vision"))
+        seedClipboard(clips)
+        seedVision(vision)
+
         let notch = CGSize(width: 185, height: 32)
-        func notchShot(_ name: String, hovering: Bool, wings: Bool = true, setup: (TimerEngine) -> Void) {
+        func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
+                       large: Bool = false, dragging: DropZone? = nil, setup: (TimerEngine) -> Void) {
             let engine = TimerEngine(store: store, persistsState: false)
             let state = NotchState()
             state.notchSize = notch
             state.hovering = hovering
             state.showWings = wings
+            state.page = page
+            state.large = large
+            state.pinned = page != .timer
+            if let dragging {
+                state.dragging = true
+                state.dropZone = dragging
+            }
             setup(engine)
             let view = ZStack(alignment: .top) {
                 LinearGradient(colors: [Color(red: 0.35, green: 0.45, blue: 0.6), Color(red: 0.75, green: 0.6, blue: 0.55)],
                                startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color.white.opacity(0.25)).frame(height: notch.height)
-                NotchRootView(engine: engine, store: store, state: state, openLog: {})
+                NotchRootView(engine: engine, store: store, clips: clips, vision: vision, state: state,
+                              openLog: {}, collapse: {}, onDrop: { _, _ in })
             }
-            render(view, size: CGSize(width: 620, height: notch.height + 380), dark: true,
+            render(view, size: CGSize(width: 900, height: notch.height + 600), dark: true,
                    to: dir.appendingPathComponent("notch-\(name).png"))
         }
 
@@ -52,11 +67,20 @@ enum Snapshots {
             e.task = "Gears HUD watch sync"; e.start(minutes: 50); e.simulate(elapsed: 52 * 60); e.finish()
         }
 
+        notchShot("7-clipboard", hovering: true, page: .clipboard) { e in
+            e.start(minutes: 50); e.simulate(elapsed: 12 * 60)
+        }
+        notchShot("8-clipboard-large", hovering: true, page: .clipboard, large: true) { _ in }
+        notchShot("9-vision", hovering: true, page: .vision) { _ in }
+        notchShot("10-vision-large", hovering: true, page: .vision, large: true) { _ in }
+        notchShot("11-drop", hovering: true, dragging: .vision) { _ in }
+
         for dark in [false, true] {
             render(DashboardView(store: store), size: CGSize(width: 940, height: 1100), dark: dark,
                    to: dir.appendingPathComponent("dashboard-\(dark ? "dark" : "light").png"))
         }
         try? FileManager.default.removeItem(at: file)
+        try? FileManager.default.removeItem(at: tmp)
         print("Snapshots written to \(dir.path)")
     }
 
@@ -72,6 +96,45 @@ enum Snapshots {
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    private static func swatch(_ colors: [NSColor], _ label: String) -> NSImage {
+        NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
+            NSGradient(colors: colors)!.draw(in: rect, angle: 60)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 64, weight: .heavy),
+                .foregroundColor: NSColor.white.withAlphaComponent(0.85),
+            ]
+            let s = NSAttributedString(string: label, attributes: attrs)
+            s.draw(at: NSPoint(x: 40, y: 50))
+            return true
+        }
+    }
+
+    private static func seedClipboard(_ clips: ClipboardStore) {
+        for i in 1...14 { clips.add(.text("Older clip #\(i)"), source: "Notes") }
+        clips.add(.files([URL(fileURLWithPath: "/Users/you/Gears_projects/Recorder_Gears/notes.md"),
+                          URL(fileURLWithPath: "/Users/you/Desktop/plan.pdf")]), source: "Finder")
+        clips.add(.image(swatch([.systemTeal, .systemIndigo], "Screenshot")), source: "Screenshot")
+        clips.add(.text("Deep work is the ability to focus without distraction on a cognitively demanding task."), source: "Safari")
+        clips.add(.text("https://github.com/christianqp4/deepwork-tracker"), source: "Arc")
+        clips.add(.text("func toggle(page: NotchPage) {\n    state.page = page\n}"), source: "Xcode")
+        clips.add(.text("Meeting moved to 16:30, bring the Gears HUD prototype"), source: "Messages")
+        let pinned = clips.items.first { $0.text?.hasPrefix("Deep work") == true }!
+        clips.togglePin(pinned.id)
+        clips.add(.text("Madrid 4G budget: rent 950, food 380, gym 45"), source: "Numbers")
+    }
+
+    private static func seedVision(_ vision: VisionStore) {
+        vision.add([
+            .image(swatch([.systemOrange, .systemPink], "Lisbon")),
+            .text("Ship Gears HUD 1.0 before spring"),
+            .image(swatch([.systemGreen, .systemTeal], "Strong")),
+            .image(swatch([.systemPurple, .systemBlue], "Studio")),
+            .text("4 hours of deep work, every weekday"),
+            .image(swatch([.systemYellow, .systemOrange], "Sunrise")),
+            .text("Calm is a superpower"),
+        ])
     }
 
     /// Roughly a year of plausible deep work, deterministic.
