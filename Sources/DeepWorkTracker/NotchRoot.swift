@@ -8,7 +8,9 @@ struct NotchRootView: View {
     @ObservedObject var clips: ClipboardStore
     @ObservedObject var vision: VisionStore
     @ObservedObject var state: NotchState
+    @ObservedObject var ambient: AmbientPlayer
     let openLog: () -> Void
+    let addPast: () -> Void
     let collapse: () -> Void
     let onDrop: (DropZone, [NSItemProvider]) -> Void
 
@@ -88,10 +90,17 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var timerPage: some View {
-        switch engine.phase {
-        case .idle: IdleView(engine: engine, store: store, openLog: openLog)
-        case .running, .paused: RunningView(engine: engine)
-        case .finishing: FinishView(engine: engine)
+        switch (engine.phase, state.large) {
+        case (.idle, false):
+            IdleView(engine: engine, store: store, ambient: ambient, openLog: openLog, addPast: addPast)
+        case (.idle, true):
+            LargeIdleView(engine: engine, store: store, ambient: ambient, openLog: openLog, addPast: addPast)
+        case (.running, false), (.paused, false):
+            RunningView(engine: engine, ambient: ambient)
+        case (.running, true), (.paused, true):
+            LargeRunningView(engine: engine, store: store, ambient: ambient, addPast: addPast)
+        case (.finishing, _):
+            FinishView(engine: engine)
         }
     }
 
@@ -113,7 +122,11 @@ struct NotchRootView: View {
                 case .timer:
                     let today = store.total(onDay: Date())
                         + (engine.isActive || engine.phase == .finishing ? engine.elapsed : 0)
-                    Text("Today \(Fmt.hm(today))").monospacedDigit()
+                    Text("Today \(Fmt.hm(today))").monospacedDigit().lineLimit(1)
+                    if engine.phase != .finishing {
+                        toolButton(state.large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                                   help: state.large ? "Smaller" : "Bigger") { state.large.toggle() }
+                    }
                 case .clipboard, .vision:
                     toolButton(state.large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
                                help: state.large ? "Smaller" : "Bigger") { state.large.toggle() }

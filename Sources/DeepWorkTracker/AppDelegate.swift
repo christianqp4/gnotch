@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -9,14 +10,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var engine = TimerEngine(store: store)
     private let clips = ClipboardStore()
     private let vision = VisionStore()
+    private let ambient = AmbientPlayer()
+    private let router = DashboardRouter()
+    private var phaseWatch: AnyCancellable?
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
     private var dashboard: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision,
-                                openLog: { [weak self] in self?.showDashboard() })
+        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, ambient: ambient,
+                                openLog: { [weak self] in self?.showDashboard() },
+                                addPast: { [weak self] in self?.showDashboard(addBlock: true) })
+        phaseWatch = engine.$phase.sink { [ambient] phase in ambient.timerRunning(phase == .running) }
 
         // ⌃⌥D timer · ⌃⌥V clipboard · ⌃⌥B vision board
         HotKeys.register(keyCode: kVK_ANSI_D, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .timer) }
@@ -63,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(ClosureMenuItem("Log & Heatmap", key: "l") { [weak self] in self?.showDashboard() })
         menu.addItem(.separator())
 
+        let sounds = ClosureMenuItem("Timer Sounds") { Sounds.enabled.toggle() }
+        sounds.state = Sounds.enabled ? .on : .off
+        menu.addItem(sounds)
         let pause = ClosureMenuItem("Pause Clipboard History") { [clips] in clips.paused.toggle() }
         pause.state = clips.paused ? .on : .off
         menu.addItem(pause)
@@ -105,20 +114,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Dashboard
 
-    func showDashboard() {
+    func showDashboard(addBlock: Bool = false) {
         if dashboard == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 940, height: 780),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable],
                              backing: .buffered, defer: false)
             w.title = "DeepWork Tracker"
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: DashboardView(store: store))
+            w.contentView = NSHostingView(rootView: DashboardView(store: store, router: router))
             w.center()
             w.setFrameAutosaveName("Dashboard")
             dashboard = w
         }
         NSApp.activate(ignoringOtherApps: true)
         dashboard?.makeKeyAndOrderFront(nil)
+        if addBlock { router.addRequest += 1 }
     }
 
     // MARK: Main menu (needed so ⌘C / ⌘V / ⌘W work in text fields)

@@ -43,7 +43,7 @@ final class NotchState: ObservableObject {
     @Published var page = NotchPage(rawValue: UserDefaults.standard.string(forKey: "notchPage") ?? "") ?? .timer {
         didSet { UserDefaults.standard.set(page.rawValue, forKey: "notchPage") }
     }
-    /// Bigger layout for the clipboard and vision board pages.
+    /// Bigger layout for every page.
     @Published var large = UserDefaults.standard.bool(forKey: "notchLarge") {
         didSet { UserDefaults.standard.set(large, forKey: "notchLarge") }
     }
@@ -94,8 +94,12 @@ enum NotchLayout {
         case .timer:
             switch phase {
             case .finishing: return CGSize(width: 480, height: notch.height + 318)
-            case .idle: return CGSize(width: 460, height: notch.height + 178)
-            case .running, .paused: return CGSize(width: 480, height: notch.height + 104)
+            case .idle:
+                return state.large ? CGSize(width: 760, height: notch.height + 428)
+                                   : CGSize(width: 480, height: notch.height + 178)
+            case .running, .paused:
+                return state.large ? CGSize(width: 760, height: notch.height + 218)
+                                   : CGSize(width: 480, height: notch.height + 104)
             }
         case .clipboard:
             return state.large ? CGSize(width: 760, height: notch.height + 520)
@@ -133,7 +137,7 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
 
     init(engine: TimerEngine, store: SessionStore, clips: ClipboardStore, vision: VisionStore,
-         openLog: @escaping () -> Void) {
+         ambient: AmbientPlayer, openLog: @escaping () -> Void, addPast: @escaping () -> Void) {
         self.engine = engine
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                            backing: .buffered, defer: false)
@@ -150,8 +154,8 @@ final class NotchController {
 
         let state = self.state
         let root = NotchRootView(
-            engine: engine, store: store, clips: clips, vision: vision, state: state,
-            openLog: openLog,
+            engine: engine, store: store, clips: clips, vision: vision, state: state, ambient: ambient,
+            openLog: openLog, addPast: addPast,
             collapse: { [weak self] in self?.collapse() },
             onDrop: { zone, providers in
                 PasteboardReader.read(providers: providers) { contents in
@@ -371,8 +375,8 @@ final class NotchController {
         case .finishing:
             panel.makeKey()
         case .running where old == .idle:
-            // Started a block: get out of the way.
-            state.pinned = false
+            // Started a block: compact mode gets out of the way, big mode stays open as a focus screen.
+            if !(state.large && state.page == .timer) { state.pinned = false }
             dropKeyIfNeeded()
         case .idle where old == .finishing:
             state.pinned = false

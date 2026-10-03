@@ -27,9 +27,15 @@ A macOS notch app with three pages that swap in place:
   - **Intensity**: average intensity for the day.
   
   Click a day to filter the log. Click a block to edit it or delete it. Stats: today, week, month, streak, 30-day average intensity, all time.
+- **Big mode (⤢).** The timer page grows into a focus screen: large countdown ring, today's blocks, stats and the full-year heatmap. In big mode the notch stays open while a block runs (Esc or ⌃ to tuck it away).
+- **Sounds.** Soft system sounds on start, pause, goal and save (toggle: menu bar → *Timer Sounds*). Optional **focus sound** while a block runs: brown, pink or white noise, or ocean waves, generated live with no audio files. It fades out when you pause.
+- **Add past blocks.** Worked in the library, or forgot to start the timer? *Add past block* (in the notch or the dashboard): start time, duration (quick 25m…4h buttons), intensity, feelings, notes. It warns if the block overlaps one already logged. Manual blocks show a ✎ in the log, and any block's times can be edited later.
 - **Survives restarts.** A running block is saved, so quitting or rebooting doesn't lose it. The timer auto-pauses when the Mac sleeps.
 
+<img src="docs/notch-timer-large.png" width="700" alt="Big timer page">
+<img src="docs/notch-timer-running-large.png" width="700" alt="Big timer while running">
 <img src="docs/notch-finish.png" width="620" alt="Finish form">
+<img src="docs/add-past-block.png" width="450" alt="Add a past block">
 <img src="docs/dashboard.png" width="700" alt="Dashboard with heatmap and log">
 
 ## Pages, shortcuts and opening the notch
@@ -41,7 +47,7 @@ A macOS notch app with three pages that swap in place:
 | **⌃⌥D** | Timer |
 | **⌃⌥V** | Clipboard (search is focused: type, **↩** copies the top match) |
 | **⌃⌥B** | Vision Board |
-| ⤢ button | Bigger layout for Clipboard and Vision Board |
+| ⤢ button | Bigger layout for any page |
 
 The small icons left of the notch switch pages; while a block runs, the timer icon shows the countdown.
 
@@ -62,7 +68,11 @@ The small icons left of the notch switch pages; while a block runs, the timer ic
 <img src="docs/notch-vision.png" width="560" alt="Vision board page">
 <img src="docs/notch-drop.png" width="560" alt="Drop targets while dragging onto the notch">
 
-Drag images (or image files) onto the notch and drop on *Vision Board*, add a note (a goal, a quote), or **Paste** what's on the clipboard. Click a tile to see it big.
+A free canvas. Drag images (or image files) onto the notch and drop on *Vision Board*, add a note (a goal, a quote), or **Paste** what's on the clipboard.
+
+- **Drag** a tile to move it anywhere. Click to select it, then drag the white corner handle to **resize**.
+- **Double-click** to see it big. Right-click: bring to front, copy image, show in Finder, remove.
+- **Tidy** snaps everything back into a grid.
 
 ## Build & install
 

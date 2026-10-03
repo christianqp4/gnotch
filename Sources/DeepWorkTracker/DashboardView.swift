@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct DashboardView: View {
     @ObservedObject var store: SessionStore
+    @ObservedObject var router: DashboardRouter
+    @State private var adding: DeepWorkSession?
     @AppStorage("heatMetric") private var metricRaw = HeatMetric.score.rawValue
     @State private var selectedDay: Date?
     @State private var editing: DeepWorkSession?
@@ -16,6 +18,13 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                    // Separate view from the edit sheet so both sheets work.
+                    .sheet(item: $adding) { s in
+                        SessionEditor(draft: s, isNew: true, others: store.sessions,
+                                      onSave: { store.add($0); adding = nil },
+                                      onDelete: {},
+                                      onCancel: { adding = nil })
+                    }
                 statsRow
                 heatmapCard
                 sessionsSection
@@ -25,11 +34,13 @@ struct DashboardView: View {
         .frame(minWidth: 860, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: $editing) { s in
-            SessionEditor(draft: s,
+            SessionEditor(draft: s, isNew: false, others: store.sessions,
                           onSave: { store.update($0); editing = nil },
                           onDelete: { store.delete(s.id); editing = nil },
                           onCancel: { editing = nil })
         }
+        .onAppear { if router.addRequest > 0 { adding = SessionEditor.blank() } }
+        .onChange(of: router.addRequest) { _, _ in adding = SessionEditor.blank() }
     }
 
     // MARK: Header
@@ -47,6 +58,12 @@ struct DashboardView: View {
             } label: {
                 Label("Data file", systemImage: "folder")
             }
+            Button {
+                adding = SessionEditor.blank()
+            } label: {
+                Label("Add past block", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
             Button(action: exportCSV) {
                 Label("Export CSV", systemImage: "square.and.arrow.up")
             }
@@ -188,6 +205,12 @@ struct SessionRow: View {
                 HStack {
                     Text(session.displayTask).font(.system(size: 13, weight: .semibold))
                     Spacer()
+                    if session.manual == true {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .help("Added by hand")
+                    }
                     IntensityBadge(value: session.intensity)
                 }
                 if !session.tags.isEmpty {
@@ -210,20 +233,96 @@ struct SessionRow: View {
     }
 }
 
+/// Edits a logged block, or creates one by hand (e.g. a library session done away from the Mac).
 struct SessionEditor: View {
     @State var draft: DeepWorkSession
+    let isNew: Bool
+    let others: [DeepWorkSession]
     let onSave: (DeepWorkSession) -> Void
     let onDelete: () -> Void
     let onCancel: () -> Void
 
+    @State private var start: Date
+    @State private var hours: Int
+    @State private var minutes: Int
+
+    init(draft: DeepWorkSession, isNew: Bool, others: [DeepWorkSession],
+         onSave: @escaping (DeepWorkSession) -> Void, onDelete: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        _draft = State(initialValue: draft)
+        self.isNew = isNew
+        self.others = others
+        self.onSave = onSave
+        self.onDelete = onDelete
+        self.onCancel = onCancel
+        _start = State(initialValue: draft.start)
+        let m = Int((draft.duration / 60).rounded())
+        _hours = State(initialValue: m / 60)
+        _minutes = State(initialValue: m % 60)
+    }
+
+    /// A blank block ending now-ish, for manual entry.
+    static func blank() -> DeepWorkSession {
+        let cal = Calendar.current
+        var start = Date().addingTimeInterval(-2 * 3600)
+        let m = cal.component(.minute, from: start)
+        start = cal.date(byAdding: .minute, value: -(m % 5), to: start)!
+        start = cal.date(bySetting: .second, value: 0, of: start) ?? start
+        return DeepWorkSession(start: start, end: start.addingTimeInterval(7200), duration: 7200, plannedMinutes: nil,
+                               task: "", intensity: 3, tags: [], notes: "", manual: true)
+    }
+
+    private var duration: TimeInterval { TimeInterval(hours * 3600 + minutes * 60) }
+    private var end: Date { start.addingTimeInterval(duration) }
+    private var timesChanged: Bool {
+        abs(start.timeIntervalSince(draft.start)) > 30 || abs(duration - draft.duration) > 30
+    }
+    private var overlap: DeepWorkSession? {
+        others.first { $0.id != draft.id && $0.start < end && $0.end > start }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Edit block").font(.title3.bold())
-            Text("\(Fmt.day.string(from: draft.start)) · \(Fmt.time.string(from: draft.start))–\(Fmt.time.string(from: draft.end)) · \(Fmt.hm(draft.duration))")
-                .foregroundStyle(.secondary)
+            Text(isNew ? "Add a past block" : "Edit block").font(.title3.bold())
 
-            TextField("Task", text: $draft.task)
+            TextField("What did you work on? (e.g. Library: thesis reading)", text: $draft.task)
                 .textFieldStyle(.roundedBorder)
+
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    Text("Started").foregroundStyle(.secondary)
+                    DatePicker("", selection: $start, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                        .datePickerStyle(.field)
+                }
+                GridRow {
+                    Text("Duration").foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Stepper("\(hours) h", value: $hours, in: 0...16)
+                        Stepper(String(format: "%02d min", minutes), value: $minutes, in: 0...55, step: 5)
+                        Text("ends \(Fmt.time.string(from: end))").foregroundStyle(.secondary)
+                    }
+                    .monospacedDigit()
+                }
+                GridRow {
+                    Color.clear.frame(width: 1, height: 1)
+                    HStack(spacing: 6) {
+                        ForEach([25, 50, 90, 120, 180, 240], id: \.self) { m in
+                            Button(m < 60 ? "\(m)m" : m % 60 == 0 ? "\(m / 60)h" : "\(m / 60)h\(m % 60)") {
+                                hours = m / 60
+                                minutes = m % 60
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
+            }
+
+            if let o = overlap {
+                Label("Overlaps “\(o.displayTask)” \(Fmt.time.string(from: o.start))–\(Fmt.time.string(from: o.end))",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Intensity").font(.caption.bold()).foregroundStyle(.secondary)
@@ -234,19 +333,34 @@ struct SessionEditor: View {
                 TagPicker(selection: $draft.tags)
             }
             NotesEditor(text: $draft.notes)
-                .frame(height: 110)
+                .frame(height: 90)
 
             HStack {
-                Button("Delete", role: .destructive, action: onDelete)
+                if !isNew { Button("Delete", role: .destructive, action: onDelete) }
                 Spacer()
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button("Save") { onSave(draft) }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
+                Button(isNew ? "Add to log" : "Save") {
+                    var s = draft
+                    if isNew || timesChanged {
+                        s.start = start
+                        s.end = end
+                        s.duration = duration
+                    }
+                    onSave(s)
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .buttonStyle(.borderedProminent)
+                .disabled(duration < 60)
             }
         }
         .padding(22)
-        .frame(width: 460)
+        .frame(width: 500)
     }
+}
+
+/// Lets the notch ask the dashboard to open the "add a past block" form.
+@MainActor
+final class DashboardRouter: ObservableObject {
+    @Published var addRequest = 0
 }

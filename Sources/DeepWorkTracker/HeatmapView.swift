@@ -6,8 +6,9 @@ struct HeatmapView: View {
     let metric: HeatMetric
     @Binding var selected: Date?
 
-    private let cell: CGFloat = 11
-    private let gap: CGFloat = 3
+    var cell: CGFloat = 11
+    var gap: CGFloat = 3
+    var showExplanation = true
     private var cal: Calendar { Calendar.current }
 
     private var weeks: [[Date]] {
@@ -50,7 +51,7 @@ struct HeatmapView: View {
             }
 
             HStack(spacing: 4) {
-                Text(metric.explanation)
+                if showExplanation { Text(metric.explanation) }
                 Spacer()
                 Text("Less")
                 ForEach(0..<5, id: \.self) { l in

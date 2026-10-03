@@ -76,6 +76,7 @@ final class TimerEngine: ObservableObject {
         phase = .running
         startTicker()
         persist()
+        sound(.start)
     }
 
     func start(minutes: Int?) {
@@ -91,6 +92,7 @@ final class TimerEngine: ObservableObject {
         phase = .paused
         stopTicker()
         persist()
+        sound(.pause)
     }
 
     func resume() {
@@ -100,6 +102,7 @@ final class TimerEngine: ObservableObject {
         phase = .running
         startTicker()
         persist()
+        sound(.resume)
     }
 
     func togglePause() { phase == .running ? pause() : resume() }
@@ -129,9 +132,15 @@ final class TimerEngine: ObservableObject {
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
         ))
         reset()
+        sound(.saved)
     }
 
     func discard() { reset() }
+
+    /// Throwaway engines (snapshots) stay silent.
+    private func sound(_ e: Sounds.Event) {
+        if persistsState { Sounds.play(e) }
+    }
 
     private func reset() {
         stopTicker()
@@ -175,7 +184,7 @@ final class TimerEngine: ObservableObject {
         if !goalNotified, isOvertime {
             goalNotified = true
             persist()
-            NSSound(named: "Glass")?.play()
+            sound(.goal)
             onGoalReached?()
         }
     }

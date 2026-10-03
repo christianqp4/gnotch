@@ -40,7 +40,9 @@ struct CollapsedActivity: View {
 struct IdleView: View {
     @ObservedObject var engine: TimerEngine
     @ObservedObject var store: SessionStore
+    @ObservedObject var ambient: AmbientPlayer
     let openLog: () -> Void
+    let addPast: () -> Void
 
     private let presets: [Int?] = [25, 50, 90, 120, nil]
 
@@ -71,6 +73,7 @@ struct IdleView: View {
                     .help(m == nil ? "Open-ended: count up until you finish" : "\(m!) minute block")
                 }
                 Spacer()
+                SoundMenu(ambient: ambient, compact: true)
                 Button {
                     engine.start()
                 } label: {
@@ -99,12 +102,16 @@ struct IdleView: View {
                         .foregroundStyle(.primary)
                     Text("This week \(Fmt.hm(store.total(since: weekStart)))")
                         .monospacedDigit()
+                    Button(action: addPast) {
+                        Label("Add past block", systemImage: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                     Button(action: openLog) {
                         Label("Log & heatmap", systemImage: "arrow.up.right")
                             .labelStyle(.titleAndIcon)
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 4)
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
@@ -115,7 +122,7 @@ struct IdleView: View {
 
 struct RunningView: View {
     @ObservedObject var engine: TimerEngine
-    @State private var confirmDiscard = false
+    @ObservedObject var ambient: AmbientPlayer
 
     var body: some View {
         let paused = engine.phase == .paused
@@ -145,24 +152,38 @@ struct RunningView: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 8) {
-                CircleButton(icon: paused ? "play.fill" : "pause.fill", tint: .orange,
-                             help: paused ? "Resume" : "Pause") { engine.togglePause() }
-                CircleButton(icon: "checkmark", tint: Heat.base, help: "Finish block and log it") { engine.finish() }
-                CircleButton(icon: confirmDiscard ? "trash.fill" : "xmark", tint: confirmDiscard ? .red : .gray,
-                             help: confirmDiscard ? "Click again to discard" : "Discard block") {
-                    if confirmDiscard {
-                        engine.discard()
-                    } else {
-                        confirmDiscard = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { confirmDiscard = false }
-                    }
+            SoundMenu(ambient: ambient, compact: true)
+            TimerControls(engine: engine)
+        }
+    }
+
+    private var subtitle: String { TimerControls.subtitle(engine) }
+}
+
+struct TimerControls: View {
+    @ObservedObject var engine: TimerEngine
+    @State private var confirmDiscard = false
+
+    var body: some View {
+        let paused = engine.phase == .paused
+        HStack(spacing: 8) {
+            CircleButton(icon: paused ? "play.fill" : "pause.fill", tint: .orange,
+                         help: paused ? "Resume" : "Pause") { engine.togglePause() }
+            CircleButton(icon: "checkmark", tint: Heat.base, help: "Finish block and log it") { engine.finish() }
+            CircleButton(icon: confirmDiscard ? "trash.fill" : "xmark", tint: confirmDiscard ? .red : .gray,
+                         help: confirmDiscard ? "Click again to discard" : "Discard block") {
+                if confirmDiscard {
+                    engine.discard()
+                } else {
+                    confirmDiscard = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { confirmDiscard = false }
                 }
             }
         }
     }
 
-    private var subtitle: String {
+    @MainActor
+    static func subtitle(_ engine: TimerEngine) -> String {
         if engine.phase == .paused { return "Paused · \(Fmt.clock(engine.elapsed)) in" }
         if let g = engine.goal {
             return engine.isOvertime ? "Goal of \(Fmt.hm(g)) reached · keep going" : "\(Fmt.clock(engine.elapsed)) of \(Fmt.hm(g))"

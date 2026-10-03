@@ -19,6 +19,7 @@ enum Snapshots {
         let vision = VisionStore(dir: tmp.appendingPathComponent("vision"))
         seedClipboard(clips)
         seedVision(vision)
+        let ambient = AmbientPlayer()
 
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
@@ -41,7 +42,7 @@ enum Snapshots {
                                startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color.white.opacity(0.25)).frame(height: notch.height)
                 NotchRootView(engine: engine, store: store, clips: clips, vision: vision, state: state,
-                              openLog: {}, collapse: {}, onDrop: { _, _ in })
+                              ambient: ambient, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
             }
             render(view, size: CGSize(width: 900, height: notch.height + 600), dark: true,
                    to: dir.appendingPathComponent("notch-\(name).png"))
@@ -73,10 +74,19 @@ enum Snapshots {
         notchShot("8-clipboard-large", hovering: true, page: .clipboard, large: true) { _ in }
         notchShot("9-vision", hovering: true, page: .vision) { _ in }
         notchShot("10-vision-large", hovering: true, page: .vision, large: true) { _ in }
+        notchShot("12-timer-large-idle", hovering: true, large: true) { _ in }
+        notchShot("13-timer-large-running", hovering: true, large: true) { e in
+            e.task = "Library: thesis reading"; e.start(minutes: 90); e.simulate(elapsed: 47 * 60 + 12)
+        }
         notchShot("11-drop", hovering: true, dragging: .vision) { _ in }
 
+        render(SessionEditor(draft: SessionEditor.blank(), isNew: true, others: store.sessions,
+                             onSave: { _ in }, onDelete: {}, onCancel: {})
+                    .background(Color(nsColor: .windowBackgroundColor)),
+               size: CGSize(width: 500, height: 640), dark: true, to: dir.appendingPathComponent("editor-add.png"))
+
         for dark in [false, true] {
-            render(DashboardView(store: store), size: CGSize(width: 940, height: 1100), dark: dark,
+            render(DashboardView(store: store, router: DashboardRouter()), size: CGSize(width: 940, height: 1100), dark: dark,
                    to: dir.appendingPathComponent("dashboard-\(dark ? "dark" : "light").png"))
         }
         try? FileManager.default.removeItem(at: file)

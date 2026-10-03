@@ -15,6 +15,8 @@ struct DeepWorkSession: Codable, Identifiable, Hashable {
     var intensity: Int
     var tags: [String]
     var notes: String
+    /// Added by hand after the fact rather than timed.
+    var manual: Bool? = nil
 
     var minutes: Double { duration / 60 }
     var displayTask: String { task.isEmpty ? "Deep work" : task }
