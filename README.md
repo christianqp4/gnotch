@@ -10,7 +10,8 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 
 <img src="docs/notch-collapsed.png" width="620" alt="Collapsed notch: progress traced along the notch outline">
 <img src="docs/notch-idle.png" width="620" alt="Expanded notch with mini heatmap">
-<img src="docs/notch-running.png" width="620" alt="Expanded notch while a block runs">
+<img src="docs/notch-running.png" width="620" alt="Expanded notch while a block runs, with the drift bar">
+<img src="docs/notch-paused.png" width="620" alt="Paused after a drift: breathing guide">
 
 ## What it does
 
@@ -29,6 +30,7 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
   - **Intensity**: average intensity for the day.
   
   Click a day to filter the log. Click a block to edit it or delete it. Stats: today, week, month, streak, 30-day average intensity, all time.
+- **Drift tracker.** Lost focus? Hit pause (or **⌃⌥P** from anywhere). Each pause is logged as a *drift*, and the notch turns into a breathing guide (4 s in, 6 s out) until you resume. A bar under the timer shows the block so far: green while focused, orange where you drifted. Small orange dots beside the collapsed notch count the drifts. The finish form, the log and the dashboard show drifts per block, and the dashboard tracks **drifts per focused hour** over 30 days. When the Mac goes to sleep it pauses too, but that isn't counted as a drift.
 - **Big mode (⤢).** The timer page grows into a focus screen: large countdown ring, today's blocks, stats and the full-year heatmap. In big mode the notch stays open while a block runs (Esc or ⌃ to tuck it away).
 - **Sounds.** Soft system sounds on start, pause, goal and save (toggle: menu bar → *Timer Sounds*). Optional **focus sound** while a block runs: brown, pink or white noise, or ocean waves, generated live with no audio files. It fades out when you pause.
 - **Add past blocks.** Worked in the library, or forgot to start the timer? *Add past block* (in the notch or the dashboard): start time, duration (quick 25m…4h buttons), intensity, feelings, notes. It warns if the block overlaps one already logged. Manual blocks show a ✎ in the log, and any block's times can be edited later.
@@ -49,6 +51,7 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 | **⌃⌥D** | Timer |
 | **⌃⌥V** | Clipboard (search is focused: type, **↩** copies the top match) |
 | **⌃⌥B** | Vision Board |
+| **⌃⌥P** | I drifted: pause the block and breathe (again to resume) |
 | ⤢ button | Bigger layout for any page |
 
 The small icons left of the notch switch pages; while a block runs, the timer icon shows the countdown.
@@ -114,13 +117,14 @@ Everything is local, in one human-readable file:
     {
       "id": "…", "start": "2026-10-03T09:12:00Z", "end": "2026-10-03T10:04:00Z",
       "duration": 3120, "plannedMinutes": 50, "task": "Thesis chapter 3",
-      "intensity": 4, "tags": ["Flow", "Calm"], "notes": "Phone in another room helped."
+      "intensity": 4, "tags": ["Flow", "Calm"], "notes": "Phone in another room helped.",
+      "pauses": [{ "start": "2026-10-03T09:31:00Z", "end": "2026-10-03T09:33:10Z" }]
     }
   ]
 }
 ```
 
-`duration` is in active seconds, excluding pauses. The format is deliberately simple so other clients (e.g. the Gears HUD watch app) can read and append to it. You can also export it as CSV from the dashboard.
+`duration` is in active seconds, excluding pauses. `pauses` lists the drifts (`"auto": true` marks a pause caused by the Mac sleeping); it's missing on blocks logged before drift tracking and on blocks added by hand. `manual: true` marks blocks added by hand. The format is deliberately simple so other clients (e.g. the Gears HUD watch app) can read and append to it. You can also export it as CSV from the dashboard.
 
 ## Development
 

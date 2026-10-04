@@ -84,6 +84,9 @@ struct DashboardView: View {
             StatCard(title: "Avg intensity · 30d",
                      value: avg.map { String(format: "%.1f", $0) } ?? "–",
                      sub: avg.map { Intensity.label(Int($0.rounded())) })
+            let rate = store.driftsPerHour(lastDays: 30)
+            StatCard(title: "Drifts / hour · 30d", value: rate.map { String(format: "%.1f", $0) } ?? "–",
+                     sub: rate == nil ? "pause = drift" : nil)
             StatCard(title: "All time", value: Fmt.hm(store.totalAllTime))
         }
     }
@@ -178,6 +181,7 @@ struct StatCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
             Text(sub ?? " ").font(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,6 +209,13 @@ struct SessionRow: View {
                 HStack {
                     Text(session.displayTask).font(.system(size: 13, weight: .semibold))
                     Spacer()
+                    if let pauses = session.pauses {
+                        DriftTimeline(start: session.start, end: session.end, pauses: pauses, height: 4)
+                            .frame(width: 90)
+                        Text(session.drifts == 0 ? "no drifts" : session.drifts == 1 ? "1 drift" : "\(session.drifts) drifts")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(session.drifts > 0 ? Color.orange : Color.secondary)
+                    }
                     if session.manual == true {
                         Image(systemName: "pencil")
                             .font(.system(size: 10, weight: .semibold))

@@ -87,10 +87,14 @@ struct LargeRunningView: View {
             ZStack {
                 ProgressRing(progress: engine.goal == nil ? nil : engine.progress,
                              tint: paused ? .orange : engine.isOvertime ? Heat.base : .white, lineWidth: 9)
+                if paused, let since = engine.pauseStart {
+                    BreathingGuide(since: since, size: 150)
+                }
                 VStack(spacing: 4) {
                     Image(systemName: paused ? "pause.fill" : "flame.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(paused ? .orange : Heat.base)
+                        .opacity(paused ? 0 : 1)
                     Text(engine.displayTime)
                         .font(.system(size: 40, weight: .semibold, design: .rounded))
                         .monospacedDigit()
@@ -102,6 +106,7 @@ struct LargeRunningView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(18)
+                .opacity(paused ? 0 : 1)
             }
             .frame(width: 190, height: 190)
 
@@ -118,6 +123,7 @@ struct LargeRunningView: View {
                     TimerControls(engine: engine)
                     SoundMenu(ambient: ambient, compact: false)
                 }
+                DriftRow(engine: engine)
                 TodayBlocks(store: store, addPast: addPast, live: engine.elapsed)
             }
         }
@@ -164,6 +170,7 @@ struct TodayBlocks: View {
                                         .foregroundStyle(.tertiary)
                                 }
                                 Spacer(minLength: 4)
+                                DriftDots(count: s.drifts)
                                 IntensityBadge(value: s.intensity)
                             }
                             .padding(.horizontal, 9)

@@ -103,13 +103,13 @@ enum NotchLayout {
         switch state.visiblePage(phase: phase) {
         case .timer:
             switch phase {
-            case .finishing: return CGSize(width: 480, height: notch.height + 318)
+            case .finishing: return CGSize(width: 480, height: notch.height + 344)
             case .idle:
                 return state.large ? CGSize(width: 760, height: notch.height + 428)
                                    : CGSize(width: 480, height: notch.height + 178)
             case .running, .paused:
-                return state.large ? CGSize(width: 760, height: notch.height + 218)
-                                   : CGSize(width: 480, height: notch.height + 104)
+                return state.large ? CGSize(width: 760, height: notch.height + 238)
+                                   : CGSize(width: 480, height: notch.height + 126)
             }
         case .clipboard:
             return state.large ? CGSize(width: 760, height: notch.height + 520)
@@ -245,6 +245,13 @@ final class NotchController {
         updateMouseIgnoring()
         panel.makeKey()
         state.focusToken += 1
+    }
+
+    /// Open pinned on a page (no toggling).
+    func open(page: NotchPage) {
+        state.page = page
+        state.pinned = true
+        updateMouseIgnoring()
     }
 
     func collapse() {

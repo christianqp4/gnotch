@@ -111,15 +111,25 @@ final class SessionStore: ObservableObject {
         return recent.reduce(0) { $0 + $1.minutes * Double($1.intensity) } / mins
     }
 
+    /// Drifts per focused hour, over blocks timed with drift tracking.
+    func driftsPerHour(lastDays: Int) -> Double? {
+        let since = Calendar.current.date(byAdding: .day, value: -lastDays, to: Date())!
+        let tracked = sessions.filter { $0.start >= since && $0.pauses != nil }
+        let hours = tracked.reduce(0) { $0 + $1.duration } / 3600
+        guard hours > 0.25 else { return nil }
+        return Double(tracked.reduce(0) { $0 + $1.drifts }) / hours
+    }
+
     func csv() -> String {
         let iso = ISO8601DateFormatter()
         func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
-        var lines = ["start,end,minutes,planned_minutes,task,intensity,tags,notes"]
+        var lines = ["start,end,minutes,planned_minutes,task,intensity,tags,notes,drifts,paused_minutes"]
         for s in sessions.reversed() {
             lines.append([
                 iso.string(from: s.start), iso.string(from: s.end),
                 String(format: "%.1f", s.minutes), s.plannedMinutes.map(String.init) ?? "",
                 q(s.task), String(s.intensity), q(s.tags.joined(separator: "; ")), q(s.notes),
+                s.pauses == nil ? "" : String(s.drifts), s.pauses == nil ? "" : String(format: "%.1f", s.pausedTime / 60),
             ].joined(separator: ","))
         }
         return lines.joined(separator: "\n") + "\n"

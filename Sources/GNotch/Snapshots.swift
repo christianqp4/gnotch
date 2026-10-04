@@ -75,6 +75,7 @@ enum Snapshots {
         notchShot("2-idle-expanded", hovering: true) { _ in }
         notchShot("3-running-expanded", hovering: true) { e in
             e.task = "Thesis chapter 3"; e.start(minutes: 50); e.simulate(elapsed: 18 * 60 + 25)
+            e.simulate(drifts: [(6 * 60, 50), (13 * 60, 95)])
         }
         notchShot("4-paused-collapsed", hovering: false) { e in
             e.start(minutes: 90); e.pause(); e.simulate(elapsed: 41 * 60)
@@ -83,7 +84,8 @@ enum Snapshots {
             e.task = "Gears HUD watch sync"; e.start(minutes: 25); e.simulate(elapsed: 31 * 60 + 4)
         }
         notchShot("6-finish", hovering: false) { e in
-            e.task = "Gears HUD watch sync"; e.start(minutes: 50); e.simulate(elapsed: 52 * 60); e.finish()
+            e.task = "Gears HUD watch sync"; e.start(minutes: 50); e.simulate(elapsed: 52 * 60)
+            e.simulate(drifts: [(9 * 60, 70), (31 * 60, 150), (44 * 60, 40)]); e.finish()
         }
 
         notchShot("7-clipboard", hovering: true, page: .clipboard) { e in
@@ -95,6 +97,15 @@ enum Snapshots {
         notchShot("12-timer-large-idle", hovering: true, large: true) { _ in }
         notchShot("13-timer-large-running", hovering: true, large: true) { e in
             e.task = "Library: thesis reading"; e.start(minutes: 90); e.simulate(elapsed: 47 * 60 + 12)
+            e.simulate(drifts: [(11 * 60, 80)])
+        }
+        notchShot("15-paused-expanded", hovering: true) { e in
+            e.task = "Thesis chapter 3"; e.start(minutes: 50); e.pause(); e.simulate(elapsed: 23 * 60)
+            e.simulate(drifts: [(8 * 60, 60)])
+        }
+        notchShot("16-large-paused", hovering: true, large: true) { e in
+            e.task = "Library: thesis reading"; e.start(minutes: 90); e.pause(); e.simulate(elapsed: 35 * 60)
+            e.simulate(drifts: [(11 * 60, 80)])
         }
         UserDefaults.standard.set("Screenshots", forKey: "clipboardFilter")
         notchShot("14-screenshots", hovering: true, page: .clipboard) { _ in }
@@ -195,7 +206,11 @@ enum Snapshots {
                 store.add(DeepWorkSession(
                     start: t, end: t.addingTimeInterval(mins * 60), duration: mins * 60,
                     plannedMinutes: Int(mins), task: tasks[Int(rng.next() * Double(tasks.count))],
-                    intensity: intensity, tags: tags, notes: notes[Int(rng.next() * Double(notes.count))]))
+                    intensity: intensity, tags: tags, notes: notes[Int(rng.next() * Double(notes.count))],
+                    pauses: back < 40 ? (0..<Int(rng.next() * 4)).map { k in
+                        let at = t.addingTimeInterval(Double(k + 1) * mins * 60 / 5)
+                        return PauseSpan(start: at, end: at.addingTimeInterval(30 + rng.next() * 150))
+                    } : nil))
                 t = t.addingTimeInterval(mins * 60 + 30 * 60)
             }
         }

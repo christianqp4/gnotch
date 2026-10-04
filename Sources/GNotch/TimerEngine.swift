@@ -20,6 +20,10 @@ final class TimerEngine: ObservableObject {
     private var accumulated: TimeInterval = 0
     private var segmentStart: Date?
     private var goalNotified = false
+    /// Finished pauses in the current block, and the one in progress.
+    @Published private(set) var pauses: [PauseSpan] = []
+    @Published private(set) var pauseStart: Date?
+    private var pauseIsAuto = false
     private var ticker: Timer?
 
     let store: SessionStore
@@ -39,7 +43,7 @@ final class TimerEngine: ObservableObject {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pause() }
+            MainActor.assumeIsolated { self?.pause(auto: true) }
         }
     }
 
@@ -84,20 +88,23 @@ final class TimerEngine: ObservableObject {
         start()
     }
 
-    func pause() {
+    /// Pausing is how you flag a drift. `auto` is the Mac going to sleep, which isn't one.
+    func pause(auto: Bool = false) {
         guard phase == .running else { return }
         now = Date()
         accumulated = elapsed
         segmentStart = nil
+        pauseStart = now
+        pauseIsAuto = auto
         phase = .paused
-        stopTicker()
         persist()
-        sound(.pause)
+        if !auto { sound(.pause) }
     }
 
     func resume() {
         guard phase == .paused else { return }
         now = Date()
+        closePause()
         segmentStart = now
         phase = .running
         startTicker()
@@ -113,6 +120,7 @@ final class TimerEngine: ObservableObject {
         now = Date()
         accumulated = elapsed
         segmentStart = nil
+        closePause()
         endDate = now
         phase = .finishing
         stopTicker()
@@ -129,7 +137,8 @@ final class TimerEngine: ObservableObject {
             task: task.trimmingCharacters(in: .whitespacesAndNewlines),
             intensity: Intensity.clamp(intensity),
             tags: tags,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            pauses: pauses
         ))
         reset()
         sound(.saved)
@@ -149,9 +158,36 @@ final class TimerEngine: ObservableObject {
         accumulated = 0
         segmentStart = nil
         goalNotified = false
+        pauses = []
+        pauseStart = nil
+        pauseIsAuto = false
         phase = .idle
         task = ""
         persist()
+    }
+
+    /// Drifts so far, including a pause in progress.
+    var drifts: Int {
+        pauses.filter { $0.auto != true }.count + (pauseStart != nil && !pauseIsAuto ? 1 : 0)
+    }
+
+    /// Time spent paused so far, including a pause in progress.
+    var pausedTime: TimeInterval {
+        pauses.reduce(0) { $0 + $1.duration } + (pauseStart.map { max(0, now.timeIntervalSince($0)) } ?? 0)
+    }
+
+    private func closePause() {
+        guard let ps = pauseStart else { return }
+        pauses.append(PauseSpan(start: ps, end: now, auto: pauseIsAuto ? true : nil))
+        pauseStart = nil
+        pauseIsAuto = false
+    }
+
+    /// Fake earlier drifts (snapshots only). Offsets are seconds after the block started.
+    func simulate(drifts: [(at: TimeInterval, length: TimeInterval)]) {
+        guard let start = startDate else { return }
+        pauses = drifts.map { PauseSpan(start: start.addingTimeInterval($0.at),
+                                        end: start.addingTimeInterval($0.at + $0.length)) }
     }
 
     /// Pretend the running block started `seconds` ago (snapshots only).
@@ -160,6 +196,7 @@ final class TimerEngine: ObservableObject {
         now = Date()
         startDate = now.addingTimeInterval(-seconds)
         if phase == .running { segmentStart = startDate; accumulated = 0 } else { accumulated = seconds }
+        if phase == .paused { pauseStart = now.addingTimeInterval(-42) }
     }
 
     // MARK: Ticking
@@ -199,6 +236,10 @@ final class TimerEngine: ObservableObject {
         var accumulated: TimeInterval
         var segmentStart: Date?
         var goalNotified: Bool
+        // Optional so a timer saved by an older version still restores.
+        var pauses: [PauseSpan]?
+        var pauseStart: Date?
+        var pauseIsAuto: Bool?
     }
 
     private static let snapshotKey = "activeTimer"
@@ -211,7 +252,8 @@ final class TimerEngine: ObservableObject {
             return
         }
         let snap = Snapshot(phase: phase, task: task, start: startDate, end: endDate,
-                            accumulated: accumulated, segmentStart: segmentStart, goalNotified: goalNotified)
+                            accumulated: accumulated, segmentStart: segmentStart, goalNotified: goalNotified,
+                            pauses: pauses, pauseStart: pauseStart, pauseIsAuto: pauseIsAuto)
         d.set(try? JSONEncoder().encode(snap), forKey: Self.snapshotKey)
     }
 
@@ -224,8 +266,11 @@ final class TimerEngine: ObservableObject {
         accumulated = s.accumulated
         segmentStart = s.segmentStart
         goalNotified = s.goalNotified
+        pauses = s.pauses ?? []
+        pauseStart = s.pauseStart ?? (s.phase == .paused ? Date() : nil)
+        pauseIsAuto = s.pauseIsAuto ?? false
         now = Date()
         phase = s.phase
-        if phase == .running { startTicker() }
+        if isActive { startTicker() }
     }
 }

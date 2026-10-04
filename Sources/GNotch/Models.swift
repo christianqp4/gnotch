@@ -17,9 +17,25 @@ struct DeepWorkSession: Codable, Identifiable, Hashable {
     var notes: String
     /// Added by hand after the fact rather than timed.
     var manual: Bool? = nil
+    /// Pauses during the block. Each manual pause is a drift: attention slipped, you stopped to reset.
+    /// nil for blocks logged before drift tracking or added by hand.
+    var pauses: [PauseSpan]? = nil
+
+    var drifts: Int { pauses?.filter { $0.auto != true }.count ?? 0 }
+    var pausedTime: TimeInterval { pauses?.reduce(0) { $0 + $1.duration } ?? 0 }
 
     var minutes: Double { duration / 60 }
     var displayTask: String { task.isEmpty ? "Deep work" : task }
+}
+
+/// A pause inside a block.
+struct PauseSpan: Codable, Hashable {
+    var start: Date
+    var end: Date
+    /// true when the Mac paused it (going to sleep), not you. Not counted as a drift.
+    var auto: Bool?
+
+    var duration: TimeInterval { max(0, end.timeIntervalSince(start)) }
 }
 
 enum Intensity {

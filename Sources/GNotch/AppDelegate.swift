@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKeys.register(keyCode: kVK_ANSI_D, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .timer) }
         HotKeys.register(keyCode: kVK_ANSI_V, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .clipboard) }
         HotKeys.register(keyCode: kVK_ANSI_B, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .vision) }
+        // ⌃⌥P: "I drifted". Pauses and opens the breathing guide; again to get back to focus.
+        HotKeys.register(keyCode: kVK_ANSI_P, modifiers: HotKeys.controlOption) { [weak self] in self?.toggleDrift() }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "GNotch")
@@ -60,7 +62,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                     action: nil, keyEquivalent: "")
             header.isEnabled = false
             menu.addItem(header)
-            menu.addItem(ClosureMenuItem(engine.phase == .paused ? "Resume" : "Pause") { [engine] in engine.togglePause() })
+            let drift = ClosureMenuItem(engine.phase == .paused ? "Back to Focus" : "I Drifted: Pause & Breathe", key: "p") {
+                [weak self] in self?.toggleDrift()
+            }
+            drift.keyEquivalentModifierMask = [.control, .option]
+            menu.addItem(drift)
             menu.addItem(ClosureMenuItem("Finish & log…") { [engine] in engine.finish() })
             menu.addItem(ClosureMenuItem("Discard block") { [engine] in engine.discard() })
         case .finishing:
@@ -116,6 +122,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(login)
         menu.addItem(.separator())
         menu.addItem(ClosureMenuItem("Quit GNotch", key: "q") { NSApp.terminate(nil) })
+    }
+
+    private func toggleDrift() {
+        guard engine.isActive else { return }
+        engine.togglePause()
+        if engine.phase == .paused {
+            notch.open(page: .timer)
+        } else {
+            notch.collapse()
+        }
     }
 
     private static func toggleLaunchAtLogin() {
