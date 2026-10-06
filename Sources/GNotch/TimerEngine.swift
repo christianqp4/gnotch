@@ -127,7 +127,7 @@ final class TimerEngine: ObservableObject {
         persist()
     }
 
-    func save(task: String, intensity: Int, tags: [String], notes: String) {
+    func save(task: String, intensity: Int, tags: [String], notes: String, location: String?) {
         guard phase == .finishing, let start = startDate else { return }
         store.add(DeepWorkSession(
             start: start,
@@ -138,8 +138,10 @@ final class TimerEngine: ObservableObject {
             intensity: Intensity.clamp(intensity),
             tags: tags,
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            pauses: pauses
+            pauses: pauses,
+            location: location
         ))
+        Places.remember(location)
         reset()
         sound(.saved)
     }

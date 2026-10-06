@@ -4,7 +4,7 @@ The Gears notch app for macOS: a deep-work timer with intensity log and heatmap,
 
 ## Status
 <!-- gears:status: read by the GearsOS dashboard. Update it at the end of any session that changes where this project stands. -->
-- **Stage:** v0.5.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P), clipboard with Ubuntu-style screenshots, widget vision board
+- **Stage:** v0.5.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P) and place tags, clipboard with Ubuntu-style screenshots, widget vision board
 - **Gate:** in-use
 - **Next:** Log a week of real deep-work blocks (watch drifts per hour), then decide whether the Gears HUD watch companion is worth building.
 - **Updated:** 2026-10-05

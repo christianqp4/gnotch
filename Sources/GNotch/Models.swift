@@ -20,6 +20,8 @@ struct DeepWorkSession: Codable, Identifiable, Hashable {
     /// Pauses during the block. Each manual pause is a drift: attention slipped, you stopped to reset.
     /// nil for blocks logged before drift tracking or added by hand.
     var pauses: [PauseSpan]? = nil
+    /// Where it happened: "Library", "House", "Coworking", "Coffee" or a place you typed.
+    var location: String? = nil
 
     var drifts: Int { pauses?.filter { $0.auto != true }.count ?? 0 }
     var pausedTime: TimeInterval { pauses?.reduce(0) { $0 + $1.duration } ?? 0 }

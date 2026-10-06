@@ -123,13 +123,14 @@ final class SessionStore: ObservableObject {
     func csv() -> String {
         let iso = ISO8601DateFormatter()
         func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
-        var lines = ["start,end,minutes,planned_minutes,task,intensity,tags,notes,drifts,paused_minutes"]
+        var lines = ["start,end,minutes,planned_minutes,task,intensity,tags,notes,drifts,paused_minutes,location"]
         for s in sessions.reversed() {
             lines.append([
                 iso.string(from: s.start), iso.string(from: s.end),
                 String(format: "%.1f", s.minutes), s.plannedMinutes.map(String.init) ?? "",
                 q(s.task), String(s.intensity), q(s.tags.joined(separator: "; ")), q(s.notes),
                 s.pauses == nil ? "" : String(s.drifts), s.pauses == nil ? "" : String(format: "%.1f", s.pausedTime / 60),
+                q(s.location ?? ""),
             ].joined(separator: ","))
         }
         return lines.joined(separator: "\n") + "\n"

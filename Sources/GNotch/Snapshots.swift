@@ -210,7 +210,8 @@ enum Snapshots {
                     pauses: back < 40 ? (0..<Int(rng.next() * 4)).map { k in
                         let at = t.addingTimeInterval(Double(k + 1) * mins * 60 / 5)
                         return PauseSpan(start: at, end: at.addingTimeInterval(30 + rng.next() * 150))
-                    } : nil))
+                    } : nil,
+                    location: ["Library", "House", "House", "Coworking", "Coffee", "Biblioteca Retiro"][Int(rng.next() * 6)]))
                 t = t.addingTimeInterval(mins * 60 + 30 * 60)
             }
         }

@@ -103,7 +103,7 @@ enum NotchLayout {
         switch state.visiblePage(phase: phase) {
         case .timer:
             switch phase {
-            case .finishing: return CGSize(width: 480, height: notch.height + 344)
+            case .finishing: return CGSize(width: 480, height: notch.height + 392)
             case .idle:
                 return state.large ? CGSize(width: 760, height: notch.height + 428)
                                    : CGSize(width: 480, height: notch.height + 178)

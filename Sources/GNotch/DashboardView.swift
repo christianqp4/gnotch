@@ -27,6 +27,7 @@ struct DashboardView: View {
                     }
                 statsRow
                 heatmapCard
+                PlacesCard(store: store)
                 sessionsSection
             }
             .padding(28)
@@ -224,8 +225,9 @@ struct SessionRow: View {
                     }
                     IntensityBadge(value: session.intensity)
                 }
-                if !session.tags.isEmpty {
+                if !session.tags.isEmpty || session.location != nil {
                     FlowLayout(spacing: 4) {
+                        if let place = session.location { PlaceChip(place: place) }
                         ForEach(session.tags, id: \.self) { TagChip(text: $0) }
                     }
                 }
@@ -279,7 +281,7 @@ struct SessionEditor: View {
         start = cal.date(byAdding: .minute, value: -(m % 5), to: start)!
         start = cal.date(bySetting: .second, value: 0, of: start) ?? start
         return DeepWorkSession(start: start, end: start.addingTimeInterval(7200), duration: 7200, plannedMinutes: nil,
-                               task: "", intensity: 3, tags: [], notes: "", manual: true)
+                               task: "", intensity: 3, tags: [], notes: "", manual: true, location: Places.last)
     }
 
     private var duration: TimeInterval { TimeInterval(hours * 3600 + minutes * 60) }
@@ -343,6 +345,10 @@ struct SessionEditor: View {
                 Text("How did it feel?").font(.caption.bold()).foregroundStyle(.secondary)
                 TagPicker(selection: $draft.tags)
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Where?").font(.caption.bold()).foregroundStyle(.secondary)
+                PlacePicker(place: $draft.location)
+            }
             NotesEditor(text: $draft.notes)
                 .frame(height: 90)
 
@@ -358,6 +364,7 @@ struct SessionEditor: View {
                         s.end = end
                         s.duration = duration
                     }
+                    Places.remember(s.location)
                     onSave(s)
                 }
                 .keyboardShortcut(.return, modifiers: .command)

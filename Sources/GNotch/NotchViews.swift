@@ -208,6 +208,7 @@ struct FinishView: View {
     @State private var intensity = 3
     @State private var tags: [String] = []
     @State private var notes = ""
+    @State private var place: String? = Places.last
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -252,6 +253,11 @@ struct FinishView: View {
                 TagPicker(selection: $tags)
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                sectionLabel("Where?")
+                PlacePicker(place: $place)
+            }
+
             NotesEditor(text: $notes)
                 .frame(height: 64)
 
@@ -265,7 +271,7 @@ struct FinishView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                 Button {
-                    engine.save(task: task, intensity: intensity, tags: tags, notes: notes)
+                    engine.save(task: task, intensity: intensity, tags: tags, notes: notes, location: place)
                 } label: {
                     Text("Save to log")
                         .font(.system(size: 13, weight: .bold))

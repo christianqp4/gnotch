@@ -164,7 +164,15 @@ struct TodayBlocks: View {
                                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                                     .frame(width: 58, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(s.displayTask).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    HStack(spacing: 5) {
+                                        Text(s.displayTask).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                        if let place = s.location {
+                                            Image(systemName: Places.icon(place))
+                                                .font(.system(size: 9.5))
+                                                .foregroundStyle(.secondary)
+                                                .help(place)
+                                        }
+                                    }
                                     Text("\(Fmt.time.string(from: s.start))–\(Fmt.time.string(from: s.end))")
                                         .font(.system(size: 10))
                                         .foregroundStyle(.tertiary)
