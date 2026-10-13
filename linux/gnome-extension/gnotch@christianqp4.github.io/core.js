@@ -352,3 +352,353 @@ export function rememberPlace(custom, place) {
         return custom;
     return [p, ...custom.filter(c => c.toLowerCase() !== p.toLowerCase())].slice(0, 8);
 }
+
+// MARK: Progress outline
+
+/// How much of the outline to draw: share of the goal, or of the current hour for open-ended blocks.
+export function outlineProgress(timer, now) {
+    const e = timer.elapsed(now);
+    const g = timer.goal;
+    return g ? Math.min(1, e / g) : (e % 3600) / 3600;
+}
+
+/// The indicator's outline as an open "U", like the notch: down the left end, along the bottom,
+/// up the right end. Pieces are lines {x0,y0,x1,y1} or arcs {cx,cy,r,a0,a1} (radians, clockwise in
+/// screen space), each with its length.
+export function uOutline(w, h, inset = 2) {
+    const r = Math.max(1, (h - 2 * inset) / 2);
+    const top = inset, bottom = h - inset;
+    const left = inset + r, right = w - inset - r;
+    const straight = Math.max(0, right - left);
+    return [
+        {kind: 'arc', cx: left, cy: top + r, r, a0: -Math.PI / 2, a1: -3 * Math.PI / 2, len: Math.PI * r},
+        {kind: 'line', x0: left, y0: bottom, x1: right, y1: bottom, len: straight},
+        {kind: 'arc', cx: right, cy: top + r, r, a0: Math.PI / 2, a1: -Math.PI / 2, len: Math.PI * r},
+    ];
+}
+
+/// The pieces of `outline` covering the first `fraction` of its length (the last one cut short).
+export function trimOutline(outline, fraction) {
+    const total = outline.reduce((t, p) => t + p.len, 0);
+    let left = Math.max(0, Math.min(1, fraction)) * total;
+    const out = [];
+    for (const p of outline) {
+        if (left <= 0)
+            break;
+        const f = p.len > 0 ? Math.min(1, left / p.len) : 1;
+        out.push(p.kind === 'line'
+            ? {...p, x1: p.x0 + (p.x1 - p.x0) * f, y1: p.y0 + (p.y1 - p.y0) * f, len: p.len * f}
+            : {...p, a1: p.a0 + (p.a1 - p.a0) * f, len: p.len * f});
+        left -= p.len;
+    }
+    return out;
+}
+
+// MARK: Breathing guide
+
+/// 4 s in, 6 s out. Returns the circle scale (0.55–1) and the seconds left in this half.
+export function breath(msSincePause) {
+    const t = (Math.max(0, msSincePause) / 1000) % 10;
+    const inhale = t < 4;
+    const p = inhale ? t / 4 : (t - 4) / 6;
+    const eased = (1 - Math.cos(Math.PI * p)) / 2;
+    const scale = inhale ? 0.55 + 0.45 * eased : 1 - 0.45 * eased;
+    return {inhale, scale, secondsLeft: Math.ceil(inhale ? 4 - t : 10 - t)};
+}
+
+// MARK: Vision board (same board.json as the Mac app)
+
+export const VISION_COLUMNS = 6;
+export const VISION_MAX_ROWS = 4;
+
+export function visionDefaultSize(item) {
+    if (item.kind === 'image') {
+        const a = item.aspect ?? 1;
+        return a >= 1.25 ? [3, 2] : a <= 0.8 ? [2, 3] : [2, 2];
+    }
+    const n = (item.text ?? '').length;
+    return n <= 40 ? [2, 1] : n <= 90 ? [3, 1] : [3, 2];
+}
+
+export function visionOrdered(items) {
+    return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+/// Places widgets in order, each in the first free spot row by row, so nothing overlaps.
+/// Returns {slots: Map(id → {col, row, cols, rows}), rows}.
+export function packGrid(items, columns = VISION_COLUMNS) {
+    const occupied = [];
+    const slots = new Map();
+    const fits = (c, r, w, h) => {
+        for (let rr = r; rr < r + h; rr++) {
+            occupied[rr] ??= new Array(columns).fill(false);
+            for (let cc = c; cc < c + w; cc++) {
+                if (occupied[rr][cc])
+                    return false;
+            }
+        }
+        return true;
+    };
+    for (const item of items) {
+        const w = Math.max(1, Math.min(columns, item.cols ?? 2));
+        const h = Math.max(1, item.rows ?? 2);
+        for (let r = 0, placed = false; !placed; r++) {
+            for (let c = 0; c <= columns - w && !placed; c++) {
+                if (fits(c, r, w, h)) {
+                    for (let rr = r; rr < r + h; rr++) {
+                        for (let cc = c; cc < c + w; cc++)
+                            occupied[rr][cc] = true;
+                    }
+                    slots.set(item.id, {col: c, row: r, cols: w, rows: h});
+                    placed = true;
+                }
+            }
+        }
+    }
+    const rows = Math.max(0, ...[...slots.values()].map(s => s.row + s.rows));
+    return {slots, rows};
+}
+
+/// Sizes the resize button steps through.
+export const VISION_SIZES = [[1, 1], [2, 1], [2, 2], [3, 2], [2, 3], [3, 3], [4, 2], [6, 2], [6, 3]];
+
+export function nextVisionSize(item) {
+    const i = VISION_SIZES.findIndex(([c, r]) => c === item.cols && r === item.rows);
+    return VISION_SIZES[(i + 1) % VISION_SIZES.length];
+}
+
+/// New items go first; everything is renumbered.
+export function visionInsertFirst(items, newItems) {
+    return [...newItems, ...visionOrdered(items)].map((it, i) => ({...it, order: i}));
+}
+
+export function visionMove(items, id, delta) {
+    const list = visionOrdered(items);
+    const i = list.findIndex(it => it.id === id);
+    const j = Math.max(0, Math.min(list.length - 1, i + delta));
+    if (i < 0 || i === j)
+        return list;
+    const [it] = list.splice(i, 1);
+    list.splice(j, 0, it);
+    return list.map((x, k) => ({...x, order: k}));
+}
+
+export function visionTidy(items) {
+    return [...items].sort((a, b) => parseDate(b.date) - parseDate(a.date)).map((it, i) => {
+        const [cols, rows] = visionDefaultSize(it);
+        return {...it, cols, rows, order: i};
+    });
+}
+
+// MARK: Clipboard history
+
+export const CLIP_MAX_ITEMS = 500;
+export const CLIP_MAX_IMAGES = 80;
+export const CLIP_FILTERS = ['All', 'Text', 'Images', 'Files', 'Screenshots'];
+
+/// Never keep what a password manager copies: KeePassXC & co. mark it with this hint,
+/// and anything copied while one of these apps is focused is skipped too.
+export const PASSWORD_HINT_MIMES = ['x-kde-passwordManagerHint'];
+export const PASSWORD_MANAGERS = ['keepassxc', 'keepass2', 'keepass', 'bitwarden', '1password', 'enpass',
+    'org.gnome.world.secrets', 'secrets', 'gnome-passwordsafe', 'seahorse', 'kwalletmanager5', 'proton pass', 'dashlane'];
+
+export function isSecret(mimetypes, focusedApp) {
+    if ((mimetypes ?? []).some(m => PASSWORD_HINT_MIMES.includes(m)))
+        return true;
+    const app = (focusedApp ?? '').toLowerCase();
+    return app !== '' && PASSWORD_MANAGERS.some(p => app === p || app.includes(p));
+}
+
+/// Adds an item on top. Same signature = moved to the top (keeping its pin). Old unpinned items and
+/// images beyond the limits are dropped; returns {items, dropped} so their image files can be deleted.
+export function clipAdd(items, item, maxItems = CLIP_MAX_ITEMS, maxImages = CLIP_MAX_IMAGES) {
+    const existing = items.find(i => i.signature === item.signature);
+    const rest = items.filter(i => i.signature !== item.signature);
+    const top = existing ? {...existing, date: item.date} : item;
+    const list = [top, ...rest];
+    const keep = [], dropped = [];
+    let unpinned = 0, images = 0;
+    for (const it of list) {
+        if (!it.pinned) {
+            const image = it.kind === 'image';
+            if (unpinned + 1 > maxItems || (image && images + 1 > maxImages)) {
+                dropped.push(it); // dropped items don't count toward the limits
+                continue;
+            }
+            unpinned++;
+            if (image)
+                images++;
+        }
+        keep.push(it);
+    }
+    return {items: keep, dropped};
+}
+
+/// Pinned first, then newest first; filtered by kind and search text.
+export function clipVisible(items, filter = 'All', query = '') {
+    const q = query.trim().toLowerCase();
+    const kind = {Text: 'text', Images: 'image', Files: 'file'}[filter];
+    return items
+        .filter(i => !kind || i.kind === kind)
+        .filter(i => !q || [i.text, ...(i.paths ?? []), i.sourceApp].some(s => (s ?? '').toLowerCase().includes(q)))
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || parseDate(b.date) - parseDate(a.date));
+}
+
+export function clipPreview(item) {
+    if (item.kind === 'image')
+        return item.imageWidth ? `Image · ${item.imageWidth}×${item.imageHeight}` : 'Image';
+    if (item.kind === 'file') {
+        const names = (item.paths ?? []).map(p => p.split('/').pop());
+        return names.length === 1 ? names[0] : `${names.length} files: ${names.join(', ')}`;
+    }
+    return (item.text ?? '').trim().replace(/\s*\n\s*/g, ' ⏎ ');
+}
+
+/// Nautilus puts copied files on the clipboard as "copy\nfile:///a\nfile:///b".
+export function parseCopiedFiles(text) {
+    const lines = (text ?? '').split(/\r?\n/).filter(Boolean);
+    if (lines[0] === 'copy' || lines[0] === 'cut')
+        lines.shift();
+    const uris = lines.filter(l => l.startsWith('file://'));
+    return uris.length ? uris.map(u => decodeURIComponent(u.slice(7))) : null;
+}
+
+export function relativeTime(ms, now) {
+    const s = Math.max(0, (now - ms) / 1000);
+    if (s < 60)
+        return 'now';
+    if (s < 3600)
+        return `${Math.floor(s / 60)}m`;
+    if (s < 86400)
+        return `${Math.floor(s / 3600)}h`;
+    return `${Math.floor(s / 86400)}d`;
+}
+
+/// Blocks that started today, oldest first (for the big timer page).
+export function todaysBlocks(sessions, now) {
+    const day = startOfDay(now);
+    return sessions.filter(s => parseDate(s.start) >= day).sort((a, b) => parseDate(a.start) - parseDate(b.start));
+}
+
+/// Drifts per focused hour over the last `days`, for blocks timed with drift tracking.
+export function driftsPerHour(sessions, now, days = 30) {
+    const since = now - days * 86400_000;
+    const tracked = sessions.filter(s => parseDate(s.start) >= since && Array.isArray(s.pauses));
+    const hours = tracked.reduce((t, s) => t + (s.duration ?? 0), 0) / 3600;
+    if (hours < 0.25)
+        return null;
+    return tracked.reduce((n, s) => n + s.pauses.filter(p => !p.auto).length, 0) / hours;
+}
+
+// MARK: Heatmap views: year (GitHub) and calendar
+
+export const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const HEAT_STYLES = ['year', 'calendar'];
+
+/// ISO week (Monday first; week 1 holds the year's first Thursday), local time.
+export function isoWeek(ms) {
+    const d = new Date(startOfDay(ms));
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); // the Thursday of this week
+    const jan4 = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d - jan4) / 86400000 - 3 + (jan4.getDay() + 6) % 7) / 7);
+}
+
+/// 52 or 53: the ISO week of 28 December is always the last one.
+export function isoWeeksInYear(ms) {
+    const d = new Date(startOfDay(ms));
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    return isoWeek(new Date(d.getFullYear(), 11, 28).getTime());
+}
+
+export const weekLabel = ms => `Week ${isoWeek(ms)}/${isoWeeksInYear(ms)}`;
+
+/// The year labels week 1, every tenth week and this week.
+export const isLandmarkWeek = (w, current) => w === 1 || w % 10 === 0 || w === current;
+
+/// GitHub-style grid: `weeks` columns (oldest first), Monday on top. Month names where a month
+/// starts, week numbers underneath (landmarks + this week). Future days have level -1.
+export function heatYear(sessions, now, weeks = 53) {
+    const stats = dayStats(sessions);
+    const first = addDays(startOfWeek(now), -7 * (weeks - 1));
+    const today = startOfDay(now);
+    const current = isoWeek(now);
+    const columns = [];
+    for (let w = 0; w < weeks; w++) {
+        const days = [];
+        for (let d = 0; d < 7; d++) {
+            const ms = addDays(first, w * 7 + d);
+            days.push({ms, level: ms > today ? -1 : heatLevel(stats.get(dayKey(ms))), today: ms === today});
+        }
+        columns.push({week: isoWeek(days[3].ms), days});
+    }
+    const monthLabels = [], weekLabels = [];
+    columns.forEach((c, w) => {
+        const month = new Date(c.days[6].ms).getMonth();
+        if (w > 0 && w < weeks - 1 && month !== new Date(columns[w - 1].days[6].ms).getMonth())
+            monthLabels.push({col: w, text: MONTH_NAMES[month]});
+        const now = w === weeks - 1;
+        if (now || (c.week !== current && isLandmarkWeek(c.week, current) && Math.abs(current - c.week) > 1 &&
+            (w === 0 || columns[w - 1].week !== c.week)))
+            weekLabels.push({col: w, text: now ? `W${c.week}` : `${c.week}`, current: now});
+    });
+    return {columns, monthLabels, weekLabels};
+}
+
+/// The last `count` months as calendars, oldest first. Rows are weeks (Monday first) with their ISO
+/// number; days outside the month are null; days ahead are kept (level -1) so you can plan.
+export function heatMonths(sessions, now, count = 12) {
+    const stats = dayStats(sessions);
+    const today = startOfDay(now);
+    const thisMonth = new Date(today);
+    thisMonth.setDate(1);
+    const months = [];
+    for (let i = count - 1; i >= 0; i--) {
+        const start = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - i, 1);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 1).getTime();
+        const weeks = [];
+        for (let ws = startOfWeek(start.getTime()); ws < end; ws = addDays(ws, 7)) {
+            const days = [];
+            for (let d = 0; d < 7; d++) {
+                const ms = addDays(ws, d);
+                days.push(new Date(ms).getMonth() !== start.getMonth() ? null
+                    : {ms, level: ms > today ? -1 : heatLevel(stats.get(dayKey(ms))), today: ms === today});
+            }
+            weeks.push({week: isoWeek(addDays(ws, 3)), current: today >= ws && today < addDays(ws, 7), days});
+        }
+        const first = i === count - 1;
+        const title = first || start.getMonth() === 0
+            ? `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}` : MONTH_NAMES[start.getMonth()];
+        months.push({title, current: i === 0, weeks});
+    }
+    return months;
+}
+
+const hhmm = ms => {
+    const d = new Date(ms);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+/// What hovering a day shows: date and week, total, then each block's time and intensity.
+export function dayBrief(sessions, ms, now = Date.now()) {
+    const day = startOfDay(ms);
+    const d = new Date(day);
+    const title = `${DAY_NAMES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} · W${isoWeek(day)}`;
+    const blocks = sessions.filter(s => startOfDay(parseDate(s.start)) === day)
+        .sort((a, b) => parseDate(a.start) - parseDate(b.start));
+    if (!blocks.length)
+        return {title, summary: day > startOfDay(now) ? 'Ahead: nothing logged yet' : 'No deep work', blocks: []};
+    const total = blocks.reduce((t, s) => t + (s.duration ?? 0), 0);
+    const avg = Math.round(blocks.reduce((t, s) => t + (s.duration ?? 0) * clampIntensity(s.intensity), 0) / Math.max(1, total));
+    return {
+        title,
+        summary: `${hm(total)} · ${blocks.length === 1 ? '1 block' : `${blocks.length} blocks`} · ${INTENSITY_LABELS[clampIntensity(avg) - 1]}`,
+        blocks: blocks.map(s => {
+            const level = clampIntensity(s.intensity);
+            return {
+                time: `${hhmm(parseDate(s.start))}–${hhmm(parseDate(s.end ?? s.start))}`,
+                intensity: INTENSITY_LABELS[level - 1], color: INTENSITY_COLORS[level - 1], task: s.task || 'Deep work',
+            };
+        }),
+    };
+}

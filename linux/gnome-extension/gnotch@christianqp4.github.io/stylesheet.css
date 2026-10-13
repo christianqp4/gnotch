@@ -1,26 +1,49 @@
-.gnotch-panel { spacing: 4px; }
+.gnotch-panel { spacing: 4px; padding: 0 8px; }
 .gnotch-panel-time { font-feature-settings: "tnum"; font-weight: bold; }
 .gnotch-panel-dots { color: #f5a524; }
 
-.gnotch-card { spacing: 10px; padding: 4px 2px; min-width: 300px; }
+.gnotch-card { spacing: 10px; padding: 2px 2px 4px; }
 .gnotch-task { font-weight: bold; }
+.gnotch-text { color: #eeeeee; }
 .gnotch-muted { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
 .gnotch-big-time { font-size: 2.6em; font-weight: bold; font-feature-settings: "tnum"; }
+.gnotch-huge-time { font-size: 3.4em; font-weight: bold; font-feature-settings: "tnum"; }
 .gnotch-paused { color: #f5a524; }
+.gnotch-stat { font-size: 1.3em; font-weight: bold; }
 
 .gnotch-bar { height: 6px; border-radius: 3px; background-color: rgba(255, 255, 255, 0.08); }
-.gnotch-breath { width: 64px; height: 64px; border-radius: 32px; background-color: rgba(245, 165, 36, 0.35); border: 2px solid #f5a524; }
+.gnotch-breath { width: 72px; height: 72px; border-radius: 36px; background-color: rgba(245, 165, 36, 0.35); border: 2px solid #f5a524; }
+.gnotch-breath-large { width: 170px; height: 170px; border-radius: 85px; background-color: rgba(245, 165, 36, 0.18); }
 
-.gnotch-entry { min-width: 300px; }
+.gnotch-entry { min-width: 200px; }
 
 .gnotch-button { padding: 6px 14px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.1); }
 .gnotch-button:hover, .gnotch-button:focus { background-color: rgba(255, 255, 255, 0.18); }
 .gnotch-primary { background-color: #29c26e; color: #04220f; font-weight: bold; }
 .gnotch-primary:hover, .gnotch-primary:focus { background-color: #3dd683; }
 
+.gnotch-icon-button { padding: 6px; border-radius: 8px; color: rgba(255, 255, 255, 0.65); }
+.gnotch-icon-button:hover, .gnotch-icon-button:focus { background-color: rgba(255, 255, 255, 0.12); color: #ffffff; }
+.gnotch-icon-on { background-color: rgba(255, 255, 255, 0.16); color: #ffffff; }
+
 .gnotch-chip { padding: 4px 10px; border-radius: 99px; background-color: rgba(255, 255, 255, 0.09); font-size: 0.9em; }
 .gnotch-chip:hover, .gnotch-chip:focus { background-color: rgba(255, 255, 255, 0.18); }
 .gnotch-chip-on { background-color: #29c26e; color: #04220f; }
 
-.gnotch-heat { spacing: 2px; }
-.gnotch-cell { width: 9px; height: 9px; border-radius: 2px; }
+.gnotch-cell { border-radius: 2px; }
+
+.gnotch-clip { padding: 8px 10px; border-radius: 10px; background-color: rgba(255, 255, 255, 0.06); text-align: left; }
+.gnotch-clip:hover, .gnotch-clip:focus { background-color: rgba(255, 255, 255, 0.13); }
+.gnotch-clip-pinned { border: 1px solid rgba(41, 194, 110, 0.6); }
+
+.gnotch-image { border-radius: 8px; background-size: cover; background-position: center; background-color: rgba(255, 255, 255, 0.06); }
+
+.gnotch-tile { padding: 0; border-radius: 12px; border: 2px solid transparent; }
+.gnotch-tile:hover { border-color: rgba(255, 255, 255, 0.35); }
+.gnotch-tile-on { border-color: #29c26e; }
+.gnotch-note { padding: 8px 10px; background-color: #1d3b2b; }
+.gnotch-note-text { color: #d9f5e5; font-size: 0.85em; }
+.gnotch-note-text-large { color: #d9f5e5; font-size: 1.15em; font-weight: bold; }
+.gnotch-heat-label { color: rgba(255, 255, 255, 0.5); font-size: 0.7em; font-feature-settings: "tnum"; }
+.gnotch-heat-month { color: rgba(255, 255, 255, 0.65); font-size: 0.8em; font-weight: bold; }
+.gnotch-heat-now { color: #ffffff; font-weight: bold; }
