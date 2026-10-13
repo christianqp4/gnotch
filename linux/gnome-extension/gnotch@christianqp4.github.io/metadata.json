@@ -1,0 +1,8 @@
+{
+  "uuid": "gnotch@christianqp4.github.io",
+  "name": "GNotch",
+  "description": "Deep-work timer in the top bar: blocks, drift tracker with a breathing guide, intensity log, place tags and a heatmap. Shares sessions.json with GNotch for macOS.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "url": "https://github.com/christianqp4/gnotch",
+  "version-name": "0.5.0"
+}

@@ -1,0 +1,40 @@
+# Tests the GNOME extension on every push; on a tag like gnome-v0.5.0 it also publishes
+# gnotch-gnome-<version>.zip as a GitHub release (visible to collaborators of this private repo).
+name: GNOME extension
+
+on:
+  push:
+    paths: ['linux/gnome-extension/**', '.github/workflows/gnome-release.yml']
+    tags: ['gnome-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test core logic
+        run: node --test linux/gnome-extension/test/core.test.mjs
+      - name: Check extension syntax
+        run: node --check "linux/gnome-extension/gnotch@christianqp4.github.io/extension.js"
+      - name: Package
+        id: pkg
+        run: echo "zip=linux/gnome-extension/$(linux/gnome-extension/package.sh)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnotch-gnome
+          path: ${{ steps.pkg.outputs.zip }}
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/gnome-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.pkg.outputs.zip }}" \
+            --title "GNotch for Ubuntu (GNOME) ${GITHUB_REF_NAME#gnome-v}" \
+            --notes "Download the zip, unzip it, run ./install.sh, then log out and back in. See linux/gnome-extension/README.md."

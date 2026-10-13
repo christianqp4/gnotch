@@ -1,0 +1,26 @@
+.gnotch-panel { spacing: 4px; }
+.gnotch-panel-time { font-feature-settings: "tnum"; font-weight: bold; }
+.gnotch-panel-dots { color: #f5a524; }
+
+.gnotch-card { spacing: 10px; padding: 4px 2px; min-width: 300px; }
+.gnotch-task { font-weight: bold; }
+.gnotch-muted { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
+.gnotch-big-time { font-size: 2.6em; font-weight: bold; font-feature-settings: "tnum"; }
+.gnotch-paused { color: #f5a524; }
+
+.gnotch-bar { height: 6px; border-radius: 3px; background-color: rgba(255, 255, 255, 0.08); }
+.gnotch-breath { width: 64px; height: 64px; border-radius: 32px; background-color: rgba(245, 165, 36, 0.35); border: 2px solid #f5a524; }
+
+.gnotch-entry { min-width: 300px; }
+
+.gnotch-button { padding: 6px 14px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.1); }
+.gnotch-button:hover, .gnotch-button:focus { background-color: rgba(255, 255, 255, 0.18); }
+.gnotch-primary { background-color: #29c26e; color: #04220f; font-weight: bold; }
+.gnotch-primary:hover, .gnotch-primary:focus { background-color: #3dd683; }
+
+.gnotch-chip { padding: 4px 10px; border-radius: 99px; background-color: rgba(255, 255, 255, 0.09); font-size: 0.9em; }
+.gnotch-chip:hover, .gnotch-chip:focus { background-color: rgba(255, 255, 255, 0.18); }
+.gnotch-chip-on { background-color: #29c26e; color: #04220f; }
+
+.gnotch-heat { spacing: 2px; }
+.gnotch-cell { width: 9px; height: 9px; border-radius: 2px; }

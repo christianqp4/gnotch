@@ -6,6 +6,8 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 - **Clipboard**: history of everything you copy (text, images, files), with pins and search, plus **Ubuntu-style screenshots** (every screenshot is instantly on your clipboard)
 - **Vision Board**: images and quotes as home-screen-style widgets
 
+**On Ubuntu?** There's a GNOME Shell extension with the timer, drift tracker, place tags and heatmap in the top bar, sharing the same `sessions.json` format: [linux/gnome-extension](linux/gnome-extension/README.md).
+
 *GNotch was called "DeepWork Tracker" until v0.4; data and settings migrate automatically.*
 
 <img src="docs/notch-collapsed.png" width="620" alt="Collapsed notch: progress traced along the notch outline">
@@ -160,6 +162,9 @@ swift build -c release && GNOTCH_SNAPSHOT=/tmp/gnotch-shots .build/release/GNotc
 Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns`
 
 ## Roadmap
+
+- [x] Ubuntu: GNOME Shell extension with timer, drifts, places and heatmap ([linux/gnome-extension](linux/gnome-extension/README.md))
+- [ ] Ubuntu: dashboard/log, past blocks, clipboard and vision board
 
 - [ ] Gears HUD (Wear OS) companion: start/stop from the watch, sync `sessions.json`
 - [x] Global shortcuts (⌃⌥D / ⌃⌥V / ⌃⌥B)
