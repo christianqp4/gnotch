@@ -105,8 +105,10 @@ enum NotchLayout {
             switch phase {
             case .finishing: return CGSize(width: 480, height: notch.height + 392)
             case .idle:
-                return state.large ? CGSize(width: 760, height: notch.height + 428)
-                                   : CGSize(width: 480, height: notch.height + 178)
+                // Month calendars are taller than the year grid.
+                let calendar = UserDefaults.standard.string(forKey: "heatStyle") == HeatStyle.calendar.rawValue
+                return state.large ? CGSize(width: 760, height: notch.height + (calendar ? 548 : 456))
+                                   : CGSize(width: 480, height: notch.height + (calendar ? 210 : 206))
             case .running, .paused:
                 return state.large ? CGSize(width: 760, height: notch.height + 238)
                                    : CGSize(width: 480, height: notch.height + 126)

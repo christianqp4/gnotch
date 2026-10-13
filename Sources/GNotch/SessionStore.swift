@@ -78,6 +78,12 @@ final class SessionStore: ObservableObject {
         return out
     }
 
+    /// Blocks that started on `day`, earliest first.
+    func blocks(on day: Date) -> [DeepWorkSession] {
+        let cal = Calendar.current
+        return sessions.filter { cal.isDate($0.start, inSameDayAs: day) }.sorted { $0.start < $1.start }
+    }
+
     func total(onDay day: Date) -> TimeInterval {
         let cal = Calendar.current
         return sessions.filter { cal.isDate($0.start, inSameDayAs: day) }.reduce(0) { $0 + $1.duration }

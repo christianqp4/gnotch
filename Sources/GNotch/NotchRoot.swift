@@ -15,6 +15,9 @@ struct NotchRootView: View {
     let collapse: () -> Void
     let onDrop: (DropZone, [NSItemProvider]) -> Void
 
+    /// Read here so the notch resizes when the heatmap switches between year and calendar.
+    @AppStorage("heatStyle") private var heatStyle = HeatStyle.year.rawValue
+
     private let spring = Animation.spring(response: 0.36, dampingFraction: 0.82)
 
     var body: some View {
@@ -54,6 +57,7 @@ struct NotchRootView: View {
         .animation(spring, value: engine.phase)
         .animation(spring, value: state.page)
         .animation(spring, value: state.large)
+        .animation(spring, value: heatStyle)
         .animation(spring, value: state.dragging)
         .animation(spring, value: state.badge)
         .animation(.easeOut(duration: 0.2), value: state.toast)

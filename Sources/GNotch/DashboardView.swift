@@ -96,7 +96,9 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Last 12 months").font(.headline)
+                Text(WeekNumber.label()).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
+                HeatStylePicker()
                 Picker("", selection: metric) {
                     ForEach(HeatMetric.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -104,7 +106,7 @@ struct DashboardView: View {
                 .labelsHidden()
                 .frame(width: 280)
             }
-            HeatmapView(stats: store.dayStats(), metric: metric.wrappedValue, selected: $selectedDay)
+            HeatmapView(store: store, metric: metric.wrappedValue, selected: $selectedDay)
         }
         .padding(18)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.04)))

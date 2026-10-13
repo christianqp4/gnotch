@@ -46,6 +46,7 @@ struct IdleView: View {
     @ObservedObject var ambient: AmbientPlayer
     let openLog: () -> Void
     let addPast: () -> Void
+    @State private var hoveredDay: Date? = SnapshotHints.hover?.day
 
     private let presets: [Int?] = [25, 50, 90, 120, nil]
 
@@ -93,12 +94,17 @@ struct IdleView: View {
 
             HStack(alignment: .bottom) {
                 Button(action: openLog) {
-                    MiniHeatmap(store: store)
+                    MiniHeatmap(store: store, hovered: $hoveredDay)
                 }
                 .buttonStyle(.plain)
-                .help("Open log & heatmap")
                 Spacer()
+                if let day = hoveredDay {
+                    DayBrief(day: day, blocks: store.blocks(on: day))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                } else {
                 VStack(alignment: .trailing, spacing: 5) {
+                    Text(WeekNumber.label()).monospacedDigit()
                     let streak = store.streak()
                     let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
                     Text(streak > 0 ? "\(streak)-day streak" : "No streak yet")
@@ -118,6 +124,7 @@ struct IdleView: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -309,51 +316,20 @@ struct OutlineProgress: View {
         let tint: Color = paused ? .orange : Heat.base
         let pulse = overtime && !paused && Int(engine.elapsed) % 2 == 0
 
-        NotchShape(topRadius: NotchLayout.ear, bottomRadius: 10, closed: false)
+        // Drawn just outside the black shape: a stroke centred on its edge goes half under the
+        // physical notch, and disappears entirely where the hardware corners are rounder.
+        let width: CGFloat = 3
+        let out = width / 2 + 1
+        NotchShape(topRadius: NotchLayout.ear, bottomRadius: 10 + out, closed: false)
             .trim(from: 0, to: max(0.004, progress))
-            .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            .stroke(tint, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+            .padding(.horizontal, -out)
+            .padding(.bottom, -out)
             .shadow(color: tint.opacity(0.7), radius: 3)
             .opacity(pulse ? 0.45 : 1)
             .animation(.linear(duration: 1), value: progress)
             .animation(.easeInOut(duration: 1), value: pulse)
             .allowsHitTesting(false)
-    }
-}
-
-/// The last 24 weeks, in the same colors and metric as the dashboard heatmap.
-struct MiniHeatmap: View {
-    @ObservedObject var store: SessionStore
-    var weeks = 24
-    var cell: CGFloat = 8
-    var gap: CGFloat = 2.5
-    @AppStorage("heatMetric") private var metricRaw = HeatMetric.score.rawValue
-
-    var body: some View {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        let weekStart = cal.dateInterval(of: .weekOfYear, for: today)?.start ?? today
-        let first = cal.date(byAdding: .weekOfYear, value: -(weeks - 1), to: weekStart)!
-        let stats = store.dayStats()
-        let metric = HeatMetric(rawValue: metricRaw) ?? .score
-
-        HStack(spacing: gap) {
-            ForEach(0..<weeks, id: \.self) { w in
-                VStack(spacing: gap) {
-                    ForEach(0..<7, id: \.self) { d in
-                        let day = cal.date(byAdding: .day, value: w * 7 + d, to: first)!
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Heat.color(metric.level(stats[day])))
-                            .frame(width: cell, height: cell)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 2)
-                                    .stroke(Color.white.opacity(day == today ? 0.85 : 0), lineWidth: 1)
-                            )
-                            .opacity(day > today ? 0 : 1)
-                    }
-                }
-            }
-        }
-        .contentShape(Rectangle())
     }
 }
 

@@ -61,16 +61,18 @@ struct LargeIdleView: View {
             }
 
             HStack(alignment: .bottom) {
-                Text("LAST 12 MONTHS").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+                Text("LAST 12 MONTHS · \(WeekNumber.label().uppercased())").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
                 Spacer()
+                HeatStylePicker(compact: true)
+                    .controlSize(.mini)
                 Button(action: openLog) { Label("Full log", systemImage: "arrow.up.right") }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
             }
             .padding(.bottom, -8)
-            HeatmapView(stats: store.dayStats(), metric: HeatMetric(rawValue: metricRaw) ?? .score,
-                        selected: .constant(nil), cell: 9, gap: 3, showExplanation: false)
+            HeatmapView(store: store, metric: HeatMetric(rawValue: metricRaw) ?? .score,
+                        selected: .constant(nil), cell: 9, gap: 3, showExplanation: false, tappable: false)
         }
     }
 }

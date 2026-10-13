@@ -112,6 +112,31 @@ enum Snapshots {
         UserDefaults.standard.removeObject(forKey: "clipboardFilter")
         notchShot("11-drop", hovering: true, dragging: .vision) { _ in }
 
+        // Heatmap styles and the hover card. The user's own style setting is put back afterwards.
+        let savedStyle = UserDefaults.standard.string(forKey: "heatStyle")
+        let cal = Calendar.current
+        let hovered = cal.date(byAdding: .day, value: -2, to: cal.startOfDay(for: Date()))!
+        let row = (cal.component(.weekday, from: hovered) - cal.firstWeekday + 7) % 7
+        for style in HeatStyle.allCases {
+            UserDefaults.standard.set(style.rawValue, forKey: "heatStyle")
+            let tag = style == .year ? "year" : "calendar"
+            notchShot("17-idle-\(tag)", hovering: true) { _ in }
+            notchShot("18-timer-large-\(tag)", hovering: true, large: true) { _ in }
+            render(DashboardView(store: store, router: DashboardRouter()), size: CGSize(width: 940, height: 1100), dark: true,
+                   to: dir.appendingPathComponent("dashboard-\(tag).png"))
+        }
+        UserDefaults.standard.set(HeatStyle.year.rawValue, forKey: "heatStyle")
+        SnapshotHints.hover = HeatHover(day: hovered, point: CGPoint(x: 26 + 51 * 14 + 5, y: 17 + CGFloat(row) * 14 + 5))
+        notchShot("19-idle-hover", hovering: true) { _ in }
+        render(DashboardView(store: store, router: DashboardRouter()), size: CGSize(width: 940, height: 1100), dark: true,
+               to: dir.appendingPathComponent("dashboard-hover.png"))
+        SnapshotHints.hover = nil
+        if let savedStyle {
+            UserDefaults.standard.set(savedStyle, forKey: "heatStyle")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "heatStyle")
+        }
+
         render(SessionEditor(draft: SessionEditor.blank(), isNew: true, others: store.sessions,
                              onSave: { _ in }, onDelete: {}, onCancel: {})
                     .background(Color(nsColor: .windowBackgroundColor)),

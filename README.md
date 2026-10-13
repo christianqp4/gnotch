@@ -6,7 +6,7 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 - **Clipboard**: history of everything you copy (text, images, files), with pins and search, plus **Ubuntu-style screenshots** (every screenshot is instantly on your clipboard)
 - **Vision Board**: images and quotes as home-screen-style widgets
 
-**On Ubuntu?** There's a GNOME Shell extension with the timer, drift tracker, place tags and heatmap in the top bar, sharing the same `sessions.json` format: [linux/gnome-extension](linux/gnome-extension/README.md).
+**On Ubuntu?** There's a GNOME Shell extension with the same three pages (timer with drift tracker and heatmap, clipboard, vision board) in the top bar, sharing the same data formats: [linux/gnome-extension](linux/gnome-extension/README.md).
 
 *GNotch was called "DeepWork Tracker" until v0.4; data and settings migrate automatically.*
 
@@ -18,7 +18,7 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 ## What it does
 
 - **Lives in the notch.** Hover the notch to expand it. Pick a block length (25 / 50 / 90 / 120 min, or ∞ open-ended), name what you're working on, start.
-- **Progress traced along the notch.** While a block runs, a line draws itself along the notch outline: down the left side, across the bottom, up the right. Green while running, orange when paused, pulsing once you pass your goal (it chimes and keeps counting overtime, so it never breaks your flow). Open-ended blocks fill the outline once per hour. The countdown sits beside the notch; turn that off in the menu (*Show Time Beside Notch*) for outline only.
+- **Progress traced along the notch.** While a block runs, a line draws itself just outside the notch outline (so the camera housing never hides it): down the left side, across the bottom, up the right. Green while running, orange when paused, pulsing once you pass your goal (it chimes and keeps counting overtime, so it never breaks your flow). Open-ended blocks fill the outline once per hour. The countdown sits beside the notch; turn that off in the menu (*Show Time Beside Notch*) for outline only.
 - **Mini heatmap in the notch.** The last 24 weeks, streak, and this week's total, right under the Start button.
 - **Log every block.** When you finish, the notch asks for:
   - **Intensity** 1–5 (Shallow · Light · Focused · Deep · Flow)
@@ -32,6 +32,11 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
   - **Intensity**: average intensity for the day.
   
   Click a day to filter the log. Click a block to edit it or delete it. Stats: today, week, month, streak, 30-day average intensity, all time.
+- **Two heatmap views** (switch with *Year | Calendar* in the dashboard or the big timer page; the notch follows):
+  - **Year**: the GitHub-style grid, zoomed out to see the trend. Month names on top, week numbers underneath (1, 10, 20, 30, 40, 50 and this week, e.g. **W42**).
+  - **Calendar**: month calendars, days left to right, every week numbered, days ahead outlined so you can plan. In the notch it shows the last three months.
+  - The current week is always in the header: **Week 42/53** (ISO weeks).
+- **Hover a day** for a quick look: date, week, total, and every block with its start–end time and intensity. In the notch the details appear beside the heatmap; in the dashboard and big timer page as a small card.
 - **Place.** When you finish (or add) a block, pick where it happened: Library, House, Coworking, Coffee, or *Other…* to type your own (remembered for next time). It defaults to your last place. The dashboard's **Where you focus** card compares places over 30 days: hours, average intensity and drifts per hour.
 - **Drift tracker.** Lost focus? Hit pause (or **⌃⌥P** from anywhere). Each pause is logged as a *drift*, and the notch turns into a breathing guide (4 s in, 6 s out) until you resume. A bar under the timer shows the block so far: green while focused, orange where you drifted. Small orange dots beside the collapsed notch count the drifts. The finish form, the log and the dashboard show drifts per block, and the dashboard tracks **drifts per focused hour** over 30 days. When the Mac goes to sleep it pauses too, but that isn't counted as a drift.
 - **Big mode (⤢).** The timer page grows into a focus screen: large countdown ring, today's blocks, stats and the full-year heatmap. In big mode the notch stays open while a block runs (Esc or ⌃ to tuck it away).
@@ -39,11 +44,16 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 - **Add past blocks.** Worked in the library, or forgot to start the timer? *Add past block* (in the notch or the dashboard): start time, duration (quick 25m…4h buttons), intensity, feelings, notes. It warns if the block overlaps one already logged. Manual blocks show a ✎ in the log, and any block's times can be edited later.
 - **Survives restarts.** A running block is saved, so quitting or rebooting doesn't lose it. The timer auto-pauses when the Mac sleeps.
 
-<img src="docs/notch-timer-large.png" width="700" alt="Big timer page">
+<img src="docs/notch-timer-large.png" width="700" alt="Big timer page, year view">
+<img src="docs/notch-timer-large-calendar.png" width="700" alt="Big timer page, calendar view with week numbers">
+<img src="docs/notch-idle-calendar.png" width="620" alt="Notch heatmap as the last three months">
+<img src="docs/notch-heatmap-hover.png" width="620" alt="Hovering a day in the notch shows its blocks">
+<img src="docs/dashboard-hover.png" width="700" alt="Dashboard: hovering a day shows a card with its blocks">
 <img src="docs/notch-timer-running-large.png" width="700" alt="Big timer while running">
 <img src="docs/notch-finish.png" width="620" alt="Finish form">
 <img src="docs/add-past-block.png" width="450" alt="Add a past block">
 <img src="docs/dashboard.png" width="700" alt="Dashboard with heatmap and log">
+<img src="docs/dashboard-calendar.png" width="700" alt="Dashboard in calendar view">
 
 ## Pages, shortcuts and opening the notch
 
@@ -148,7 +158,7 @@ Sources/GNotch/
   TimerEngine.swift      timer state machine (idle → running ⇄ paused → finishing)
   SessionStore.swift     JSON persistence + stats
   DashboardView.swift    stats, heatmap card, log, editor
-  HeatmapView.swift      53-week grid
+  HeatmapView.swift      year grid and month calendars, week numbers, hover card
   Components.swift       shared pieces (notch shape, intensity picker, tags…)
   Snapshots.swift        renders UI states to PNG with sample data
 ```
@@ -163,8 +173,8 @@ Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Reso
 
 ## Roadmap
 
-- [x] Ubuntu: GNOME Shell extension with timer, drifts, places and heatmap ([linux/gnome-extension](linux/gnome-extension/README.md))
-- [ ] Ubuntu: dashboard/log, past blocks, clipboard and vision board
+- [x] Ubuntu: GNOME Shell extension with timer, drifts, places, heatmap, clipboard and vision board ([linux/gnome-extension](linux/gnome-extension/README.md))
+- [ ] Ubuntu: dashboard/log window and past blocks
 
 - [ ] Gears HUD (Wear OS) companion: start/stop from the watch, sync `sessions.json`
 - [x] Global shortcuts (⌃⌥D / ⌃⌥V / ⌃⌥B)
