@@ -143,6 +143,9 @@ class Indicator extends PanelMenu.Button {
         item.add_child(this._card);
         this.menu.addMenuItem(item);
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        const center = new PopupMenu.PopupSwitchMenuItem('Next to the clock', this.placement === 'center');
+        center.connect('toggled', (_i, on) => ext.setPosition(on ? 'center' : 'right'));
+        this.menu.addMenuItem(center);
         this.menu.addAction('Open data folder', () =>
             Gio.AppInfo.launch_default_for_uri(`file://${this._store.dir}`, null));
 
@@ -160,6 +163,14 @@ class Indicator extends PanelMenu.Button {
             this._tick();
             return GLib.SOURCE_CONTINUE;
         });
+    }
+
+    /// 'center' (beside the clock, where the notch would be) or 'right' (with the system icons).
+    get placement() { return this._store.state.position === 'right' ? 'right' : 'center'; }
+
+    set placement(p) {
+        this._store.state.position = p;
+        this._store.saveState();
     }
 
     // MARK: State
@@ -462,14 +473,30 @@ class Indicator extends PanelMenu.Button {
 
 export default class GNotchExtension extends Extension {
     enable() {
-        this._indicator = new Indicator(this);
-        Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
+        this._addIndicator();
 
         // Same shortcuts as the Mac app: ⌃⌥D opens the timer, ⌃⌥P is "I drifted" (again to resume).
         this._accels = new Map();
         this._grab('<Control><Alt>d', () => this._indicator.menu.toggle());
         this._grab('<Control><Alt>p', () => this._indicator.togglePause());
         this._accelId = global.display.connect('accelerator-activated', (_d, action) => this._accels.get(action)?.());
+    }
+
+    /// Center by default: right after the clock, the closest thing Ubuntu has to the notch.
+    _addIndicator() {
+        this._indicator = new Indicator(this);
+        const pos = this._indicator.placement;
+        Main.panel.addToStatusArea(this.uuid, this._indicator, pos === 'center' ? 1 : 0, pos);
+    }
+
+    /// Rebuilt on idle so the switch that triggered it isn't destroyed mid-signal. The timer is saved, so nothing is lost.
+    setPosition(pos) {
+        this._indicator.placement = pos;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._indicator?.destroy();
+            this._addIndicator();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _grab(accel, fn) {

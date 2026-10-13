@@ -4,10 +4,10 @@ The Gears notch app for macOS: a deep-work timer with intensity log and heatmap,
 
 ## Status
 <!-- gears:status: read by the GearsOS dashboard. Update it at the end of any session that changes where this project stands. -->
-- **Stage:** v0.5.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P) and place tags, clipboard with Ubuntu-style screenshots, widget vision board · Ubuntu: GNOME Shell extension (timer, drifts, places, heatmap) in `linux/gnome-extension`, not yet run on a real Ubuntu machine
+- **Stage:** v0.5.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P) and place tags, clipboard with Ubuntu-style screenshots, widget vision board · Ubuntu: GNOME Shell extension (timer, drifts, places, heatmap) in `linux/gnome-extension`, GNOME 42–49; 0.5.0 didn't load on Chris's Ubuntu 22.04 (GNOME 42), 0.5.1 adds the GNOME 42 build, not yet confirmed working
 - **Gate:** in-use
 - **Next:** Install the GNOME extension on Ubuntu and fix whatever breaks there (first real run). Log a week of real deep-work blocks (watch drifts per hour), then decide whether the Gears HUD watch companion is worth building.
-- **Updated:** 2026-10-12
+- **Updated:** 2026-10-13
 <!-- /gears:status -->
 
 ## Part of GearsOS

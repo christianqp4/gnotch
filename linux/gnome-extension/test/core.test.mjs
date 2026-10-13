@@ -100,3 +100,28 @@ test('custom places are remembered, most recent first, built-ins skipped', () =>
     c = Core.rememberPlace(c, 'park');
     assert.deepEqual(c, ['park', 'Train']);
 });
+
+// GNOME 42–44 build (Ubuntu 22.04): old-style modules, where top-level vars and functions are the exports.
+import vm from 'node:vm';
+import fs from 'node:fs';
+import {build} from '../build.mjs';
+
+test('GNOME 42 build: core loads as an old-style module and behaves the same', () => {
+    const {legacy} = build();
+    const ctx = vm.createContext({});
+    vm.runInContext(fs.readFileSync(`${legacy}/core.js`, 'utf8'), ctx);
+    for (const name of Object.keys(Core))
+        assert.ok(name in ctx, `missing export ${name}`);
+    const t = new ctx.Timer();
+    t.start(T0, 25, 'x');
+    assert.equal(t.display(T0 + min(5)), '20:00');
+    assert.equal(ctx.isoDate(T0), '2026-10-03T09:12:00Z');
+});
+
+test('GNOME 42 build: extension.js has no ES module syntax and exports init()', () => {
+    const {legacy} = build();
+    const src = fs.readFileSync(`${legacy}/extension.js`, 'utf8');
+    new vm.Script(src); // parses as a classic script, so GNOME 42 can load it
+    assert.match(src, /^function init\(\)/m);
+    assert.deepEqual(JSON.parse(fs.readFileSync(`${legacy}/metadata.json`, 'utf8'))['shell-version'], ['42', '43', '44']);
+});

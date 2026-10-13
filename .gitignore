@@ -6,3 +6,4 @@ xcuserdata/
 .DS_Store
 Resources/AppIcon.iconset/
 linux/gnome-extension/dist/
+linux/gnome-extension/build/
