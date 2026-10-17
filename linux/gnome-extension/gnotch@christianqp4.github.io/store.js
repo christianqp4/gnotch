@@ -51,6 +51,93 @@ function imageSize(path) {
 
 const newId = () => GLib.uuid_string_random().toUpperCase();
 
+// MARK: Thumbnails
+
+const THUMBS = GLib.build_filenamev([GLib.get_user_cache_dir(), 'gnotch', 'thumbs']);
+const thumbWaiters = new Map(); // thumb path -> callbacks while it's being made
+const thumbQueue = [];
+let thumbsRunning = 0;
+
+/// Calls `done(path)` with a copy of `path` at most `size` px on its long side (or null).
+/// Decoding happens in GdkPixbuf's worker thread, one or two images at a time, and the result is
+/// cached in ~/.cache/gnotch/thumbs, so a big screenshot never stalls the shell.
+export function thumbnail(path, size, done) {
+    const bucket = size <= 192 ? 192 : size <= 384 ? 384 : 768;
+    let key;
+    try {
+        const info = Gio.File.new_for_path(path).query_info('time::modified,standard::size', Gio.FileQueryInfoFlags.NONE, null);
+        key = `${path}|${info.get_attribute_uint64('time::modified')}|${info.get_size()}|${bucket}`;
+    } catch {
+        done(null);
+        return;
+    }
+    const out = join(THUMBS, `${GLib.compute_checksum_for_string(GLib.ChecksumType.SHA1, key, -1)}.png`);
+    if (GLib.file_test(out, GLib.FileTest.EXISTS)) {
+        done(out);
+        return;
+    }
+    if (thumbWaiters.has(out)) {
+        thumbWaiters.get(out).push(done);
+        return;
+    }
+    thumbWaiters.set(out, [done]);
+    thumbQueue.push({path, out, bucket});
+    pumpThumbs();
+}
+
+function pumpThumbs() {
+    while (thumbsRunning < 2 && thumbQueue.length) {
+        const job = thumbQueue.shift();
+        thumbsRunning++;
+        const finish = result => {
+            thumbsRunning--;
+            for (const cb of thumbWaiters.get(job.out) ?? [])
+                cb(result);
+            thumbWaiters.delete(job.out);
+            pumpThumbs();
+        };
+        Gio.File.new_for_path(job.path).read_async(GLib.PRIORITY_LOW, null, (file, res) => {
+            let stream;
+            try {
+                stream = file.read_finish(res);
+            } catch {
+                finish(null);
+                return;
+            }
+            GdkPixbuf.Pixbuf.new_from_stream_at_scale_async(stream, job.bucket, job.bucket, true, null, (_s, r) => {
+                try {
+                    const pixbuf = GdkPixbuf.Pixbuf.new_from_stream_finish(r);
+                    GLib.mkdir_with_parents(THUMBS, 0o700);
+                    pixbuf.savev(job.out, 'png', [], []);
+                    finish(job.out);
+                } catch {
+                    finish(null);
+                }
+                try {
+                    stream.close(null);
+                } catch {}
+            });
+        });
+    }
+}
+
+/// Writes in the background (for images that can be several MB).
+function writeBytesAsync(path, bytes, done) {
+    Gio.File.new_for_path(path).replace_contents_bytes_async(bytes, null, false,
+        Gio.FileCreateFlags.REPLACE_DESTINATION, null, (f, res) => {
+            try {
+                f.replace_contents_finish(res);
+                done?.(true);
+            } catch (e) {
+                console.warn(`GNotch: couldn't write ${path}: ${e}`);
+                done?.(false);
+            }
+        });
+}
+
+/// Texts longer than this aren't kept: a huge history.json would be re-read and re-written on every copy.
+export const CLIP_MAX_TEXT = 200_000;
+
 /// Keeps a broken file aside instead of overwriting it.
 function backUp(path, text, why) {
     const backup = path.replace(/\.json$/, `.unreadable-${Math.floor(Date.now() / 1000)}.json`);
@@ -150,11 +237,15 @@ export class VisionBoard {
         return true;
     }
 
-    addImageBytes(data) {
+    /// `bytes` is a GLib.Bytes (from the clipboard). Saved in the background, then added.
+    addImageBytes(bytes, done) {
         const id = newId();
         const name = `${id}.png`;
-        writeBytes(join(this.dir, name), data);
-        this._insert(this._imageItem(id, name));
+        writeBytesAsync(join(this.dir, name), bytes, ok => {
+            if (ok)
+                this._insert(this._imageItem(id, name));
+            done?.(ok);
+        });
     }
 
     addImageFile(path) {
@@ -233,7 +324,7 @@ export class ClipHistory {
     }
 
     addText(text, sourceApp) {
-        if (!text || !text.trim())
+        if (!text || !text.trim() || text.length > CLIP_MAX_TEXT)
             return;
         const signature = `t:${GLib.compute_checksum_for_string(GLib.ChecksumType.SHA1, text, -1)}`;
         this._add({id: newId(), kind: 'text', text, sourceApp, signature});
@@ -244,18 +335,25 @@ export class ClipHistory {
         this._add({id: newId(), kind: 'file', paths, sourceApp, signature});
     }
 
-    addImage(bytes, sourceApp) {
+    /// `bytes` is a GLib.Bytes. Written in the background; `done()` runs once it's in the history.
+    addImage(bytes, sourceApp, done) {
         const signature = `i:${GLib.compute_checksum_for_bytes(GLib.ChecksumType.SHA1, bytes)}`;
         const existing = this.items.find(i => i.signature === signature);
         if (existing) {
             this._add({...existing}); // just moves it to the top
+            done?.();
             return;
         }
         const id = newId();
         const name = `${id}.png`;
-        writeBytes(join(this.imagesDir, name), bytes.get_data());
-        const size = imageSize(join(this.imagesDir, name));
-        this._add({id, kind: 'image', imageFile: name, imageWidth: size?.[0], imageHeight: size?.[1], sourceApp, signature});
+        const path = join(this.imagesDir, name);
+        writeBytesAsync(path, bytes, ok => {
+            if (!ok)
+                return;
+            const size = imageSize(path);
+            this._add({id, kind: 'image', imageFile: name, imageWidth: size?.[0], imageHeight: size?.[1], sourceApp, signature});
+            done?.();
+        });
     }
 
     togglePin(id) {

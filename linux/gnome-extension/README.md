@@ -4,6 +4,8 @@ GNotch in the Ubuntu top bar, with the same three pages as on the Mac: **timer**
 
 Works on GNOME 42 to 49: **Ubuntu 22.04 LTS**, 23.04, 23.10, **24.04 LTS**, 24.10, 25.04, 25.10. GNOME 45 changed how extensions are loaded, so the zip holds two builds (`build/42` for GNOME 42–44, `build/45` for 45+) and `install.sh` picks the right one.
 
+<img src="docs/gnome-launcher.png" width="700" alt="Search GNotch in Activities">
+<img src="docs/gnome-dock-menu.png" width="700" alt="Pinned to the dock; right-click for the pages">
 <img src="docs/gnome-placement.png" width="700" alt="Progress traced around the indicator; placement next to the clock or with the system icons">
 <img src="docs/gnome-idle.png" width="620" alt="Timer, year heatmap with month names and week numbers">
 <img src="docs/gnome-idle-calendar.png" width="620" alt="Timer, calendar heatmap with every week numbered">
@@ -21,10 +23,11 @@ Works on GNOME 42 to 49: **Ubuntu 22.04 LTS**, 23.04, 23.10, **24.04 LTS**, 24.1
 
 *These are mock-ups rendered from `preview/preview.html` (same texts, sizes and colors as the extension; the heatmaps come from the extension's own `core.js`), not live captures. Regenerate with `preview/shoot.sh`.*
 
-## What's in it (v0.6.0)
+## What's in it (v0.6.1)
 
 | | |
 |---|---|
+| **GNotch** in Activities | Search "GNotch" (or "deep work", "clipboard"…) and press Enter: opens the timer. Pin it to the dock; right-click it for Timer, Clipboard, Vision board and *I drifted* |
 | Click the indicator | Opens the card. **⤢** makes it big (or small again), **⌃** tucks it away, **Esc** too |
 | **⌃⌥D** · **⌃⌥V** · **⌃⌥B** | Timer · Clipboard (search focused, **↩** copies the top match) · Vision board. Again to close |
 | **⌃⌥P** | I drifted: pause and breathe (again to go back to focus) |
@@ -64,7 +67,9 @@ Not in the Ubuntu version yet: the dashboard/log window, adding past blocks and 
 4. If the icon isn't in the top bar yet: `gnome-extensions enable gnotch@christianqp4.github.io`
 5. Still nothing? `gnome-extensions info gnotch@christianqp4.github.io` shows its state (`ERROR` or `OUT OF DATE` say why).
 
-Update: same steps with the new zip. Uninstall: `gnome-extensions uninstall gnotch@christianqp4.github.io`.
+The installer also adds **GNotch to your apps** (Activities search, app grid, dock). The launcher doesn't start a separate program: GNotch runs inside GNOME Shell, and the icon just opens its card.
+
+Update: same steps with the new zip. Uninstall: `./install.sh --uninstall` (removes the extension and the launcher; your data stays in `~/.local/share/gnotch`).
 
 From a clone instead of a zip: `./linux/gnome-extension/install.sh` (needs Node.js to build first).
 
@@ -95,7 +100,13 @@ test/core.test.mjs
 install.sh, package.sh
 ```
 
-Write the source as GNOME 45+ ES modules only. `build.mjs` converts it for GNOME 42–44, so keep the imports in the forms it knows (it fails loudly on anything else).
+Write the source as GNOME 45+ ES modules only. Things that differ between GNOME versions and have bitten before:
+
+- **Scroll views**: on GNOME 42–45 the content must be attached with `add_actor()`; `set_child()` leaves it unallocated and can hang the whole shell (it ended the session on 0.6.0). GNOME 46 removed `add_actor()`. `UI.scroll()` handles both.
+- **Images**: St decodes CSS background images synchronously at full size, in the compositor. Always go through `Store.thumbnail()` (async, cached in `~/.cache/gnotch/thumbs`).
+- **Rebuilding the card**: call `_render()`, which runs on idle, never from inside a click handler of a widget it destroys, and it moves keyboard focus off entries first.
+
+ `build.mjs` converts it for GNOME 42–44, so keep the imports in the forms it knows (it fails loudly on anything else).
 
 ```bash
 node --test linux/gnome-extension/test/core.test.mjs   # logic tests, run anywhere

@@ -1,0 +1,14 @@
+#!/bin/sh
+# GNotch's app launcher (Activities search, the dock, its right-click menu).
+# GNotch lives inside GNOME Shell as an extension, so this just asks it to open a page:
+#   gnotch-launch [timer|clipboard|vision|drift]
+page="${1:-timer}"
+if [ "$page" = drift ]; then
+  set -- --method io.github.christianqp4.GNotch.TogglePause
+else
+  set -- --method io.github.christianqp4.GNotch.Show "'$page'"
+fi
+gdbus call --session --dest org.gnome.Shell --object-path /io/github/christianqp4/GNotch "$@" >/dev/null 2>&1 && exit 0
+notify-send -i gnotch "GNotch isn't running yet" \
+  "Log out and back in, or run: gnome-extensions enable gnotch@christianqp4.github.io" 2>/dev/null
+exit 1

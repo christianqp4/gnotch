@@ -51,11 +51,14 @@ export function label(text, styleClass = 'gnotch-muted') {
     return new St.Label({text, style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});
 }
 
-export function wrapLabel(text, styleClass, lines = 3) {
-    const l = new St.Label({text, style_class: styleClass});
+/// Wrapped text of a fixed width. The text is cut to roughly `lines` lines first: a wrapped label
+/// without a width, or with a huge text, makes the shell re-measure it over and over.
+export function wrapLabel(text, styleClass, lines = 3, width = 240) {
+    const max = Math.max(20, Math.round(lines * width / 7));
+    const t = text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+    const l = new St.Label({text: t, style_class: styleClass, style: `width: ${width}px;`});
     l.clutter_text.line_wrap = true;
-    l.clutter_text.ellipsize = 3; // Pango.EllipsizeMode.END
-    l.style = `max-height: ${lines * 1.4}em;`;
+    l.clutter_text.line_wrap_mode = 2; // Pango.WrapMode.WORD_CHAR: long URLs wrap too
     return l;
 }
 
@@ -66,8 +69,10 @@ export function entry(hint, text, onActivate) {
     return e;
 }
 
-/// Wraps `child` in a scroll view of at most `height` px. (A scroll view needs a scrollable child,
-/// hence the box around it.)
+/// Wraps `child` in a scroll view of at most `height` px. A scroll view needs a scrollable child
+/// (hence the box), and it must be attached the way each GNOME version expects: on GNOME 42–45
+/// only add_actor() wires it up (set_child() leaves it unallocated, which can hang the shell);
+/// GNOME 46 removed add_actor() and uses set_child().
 export function scroll(child, height) {
     const sv = new St.ScrollView({
         hscrollbar_policy: St.PolicyType.NEVER, vscrollbar_policy: St.PolicyType.AUTOMATIC,
@@ -75,16 +80,27 @@ export function scroll(child, height) {
     });
     const box = new St.BoxLayout({vertical: true, x_expand: true});
     box.add_child(child);
-    sv.set_child(box);
+    if (typeof sv.add_actor === 'function')
+        sv.add_actor(box);
+    else
+        sv.set_child(box);
     return sv;
 }
 
-/// An image file as a rounded tile (St draws CSS background images).
-export function imageTile(path, w, h, extra = '') {
-    return new St.Widget({
-        style_class: 'gnotch-image',
-        style: `width: ${w}px; height: ${h}px; background-image: url("file://${encodeURI(path)}"); ${extra}`,
+/// An image as a rounded tile. `thumb(path, size, done)` (Store.thumbnail) supplies a small copy;
+/// until it's ready the tile is a grey placeholder. Full-size images are never handed to St:
+/// it decodes CSS background images in the shell's main thread, at full size.
+export function imageTile(path, w, h, thumb) {
+    const tile = new St.Widget({style_class: 'gnotch-image', style: `width: ${w}px; height: ${h}px;`});
+    let alive = true;
+    tile.connect('destroy', () => {
+        alive = false;
     });
+    thumb(path, Math.max(w, h) * 2, small => {
+        if (alive && small)
+            tile.style = `width: ${w}px; height: ${h}px; background-image: url("file://${encodeURI(small)}");`;
+    });
+    return tile;
 }
 
 function rgba(cr, hex, alpha = 1) {
@@ -157,16 +173,15 @@ export function ringArea(size, state) {
 const HEAT_GAP = 2;
 
 /// One day: colour only (no number inside). Hovering reports the day; days ahead are outlined.
+/// Sizes and colours come from stylesheet classes (one theme node shared by many cells, instead
+/// of parsing an inline style for each of ~400 cells).
 function heatCell(day, cell, onHover) {
     if (!day)
-        return new St.Widget({style: `width: ${cell}px; height: ${cell}px;`});
-    const future = day.level < 0;
-    const border = day.today ? 'border: 1px solid rgba(255,255,255,0.85);'
-        : future ? 'border: 1px solid rgba(255,255,255,0.14);' : '';
-    const size = day.today || future ? cell - 2 : cell; // St draws borders outside the size
+        return new St.Widget({style_class: `gnotch-cell gnotch-cell-${cell} gnotch-heat-none`});
+    const state = day.level < 0 ? 'gnotch-heat-future' : `gnotch-heat-${day.level}`;
     const w = new St.Widget({
-        style_class: 'gnotch-cell', reactive: true, track_hover: true,
-        style: `width: ${size}px; height: ${size}px; background-color: ${future ? 'transparent' : Core.HEAT[day.level]}; ${border}`,
+        style_class: `gnotch-cell gnotch-cell-${cell} ${state}${day.today ? ' gnotch-heat-today' : ''}`,
+        reactive: !!onHover, track_hover: !!onHover,
     });
     if (onHover) {
         w.connect('enter-event', () => onHover(day.ms));

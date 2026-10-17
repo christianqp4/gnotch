@@ -333,7 +333,44 @@ cards['large-calendar'] = [720, cards.large[1].replace(heatSection(true, 'year')
 const center = document.getElementById('center'), right = document.getElementById('right'), stage = document.getElementById('stage');
 right.innerHTML = SYS;
 const topState = s === 'idle' || s === 'clipboard' || s === 'clipboard-large' || s === 'vision' || s === 'vision-large' ? 'running' : s.includes('paused') ? 'paused' : s === 'finish' ? 'finish' : 'running';
-if (s === 'placement') {
+const APP_ICON = '../gnotch@christianqp4.github.io/icons/gnotch.png';
+if (s === 'launcher') {
+  // Activities overview: typing "gnotch" (or "deep work", "clipboard") finds the app.
+  center.innerHTML = CLOCK + gnotch('idle', false);
+  document.querySelector('.dock').style.display = 'none';
+  document.body.style.background = '#1d1d1d';
+  stage.innerHTML = `
+    <div style="position:absolute;left:0;right:0;top:56px;display:flex;justify-content:center">
+      <div style="width:380px;height:38px;border-radius:19px;background:#3a3a3a;display:flex;align-items:center;gap:10px;padding:0 16px;font-size:15px">
+        <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#bbb" stroke-width="1.8"/><path d="M11 11l3.5 3.5" stroke="#bbb" stroke-width="1.8"/></svg>
+        <span>gnotch</span><span style="width:1.5px;height:18px;background:#fff;margin-left:-8px"></span>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:130px;display:flex;justify-content:center">
+      <div style="width:760px;background:rgba(255,255,255,.07);border-radius:16px;padding:18px 22px;display:flex;gap:26px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.12)">
+          <img src="${APP_ICON}" width="72" height="72"><span>GNotch</span></div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:300px;text-align:center;font-size:15px;color:rgba(255,255,255,.75)">
+      Search "GNotch", "deep work" or "clipboard" and press Enter: the timer card opens next to the clock.</div>`;
+} else if (s === 'dock-menu') {
+  // Pinned to the dock; right-click for the pages.
+  center.innerHTML = CLOCK + gnotch('running', false);
+  const dock = document.querySelector('.dock');
+  dock.innerHTML = `<i style="background:#3d8ee6"></i><i style="background:#e95420"></i><i style="background:#4a4a4a"></i>
+    <img src="${APP_ICON}" width="46" height="46" style="border-radius:10px;background:rgba(255,255,255,.14);padding:2px">
+    <i style="background:#7a5bc7"></i>`;
+  stage.innerHTML = `
+    <div style="position:absolute;left:76px;top:150px;width:280px;background:#353535;border:1px solid rgba(0,0,0,.6);border-radius:12px;padding:6px 0;box-shadow:0 6px 20px rgba(0,0,0,.5)">
+      <div class="item">Timer</div><div class="item">Clipboard</div><div class="item">Vision board</div>
+      <div class="item">I drifted (pause / resume)</div>
+      <div class="sep"></div>
+      <div class="item">Remove from Favorites</div><div class="item">Show Details</div>
+    </div>
+    <div style="position:absolute;left:400px;top:190px;width:520px;font-size:15px;color:rgba(255,255,255,.8);line-height:1.6">
+      Pin GNotch to the dock and right-click it to jump straight to a page, or to log a drift without opening anything.</div>`;
+} else if (s === 'placement') {
   center.innerHTML = CLOCK + gnotch('running', false);
   stage.innerHTML = `
     <div style="position:absolute;left:62px;right:0;top:110px;text-align:center;font-size:15px;color:rgba(255,255,255,.85)">The block's progress traced around the indicator, like the line around the notch: green while focused, orange when paused</div>

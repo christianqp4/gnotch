@@ -27,6 +27,15 @@ const PAGES = [
     {id: 'vision', icon: 'image-x-generic-symbolic', name: 'Vision board'},
 ];
 const CLIPBOARD = St.ClipboardType.CLIPBOARD;
+
+/// What the app launcher (gnotch-launch, from Activities or the dock) calls to open a page.
+const DBUS_PATH = '/io/github/christianqp4/GNotch';
+const DBUS_XML = `<node>
+  <interface name="io.github.christianqp4.GNotch">
+    <method name="Show"><arg type="s" direction="in" name="page"/></method>
+    <method name="TogglePause"/>
+  </interface>
+</node>`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const clockTime = ms => new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 
@@ -132,6 +141,17 @@ class Indicator extends PanelMenu.Button {
             return;
         }
         this._page = page;
+        this._selected = null;
+        if (this.menu.isOpen)
+            this._render();
+        else
+            this.menu.open();
+        this._focusLater();
+    }
+
+    /// Opens a page without toggling (the app launcher, and pages that are already open stay open).
+    openPage(page) {
+        this._page = PAGES.some(p => p.id === page) ? page : 'timer';
         this._selected = null;
         if (this.menu.isOpen)
             this._render();
@@ -326,8 +346,30 @@ class Indicator extends PanelMenu.Button {
 
     // MARK: Render
 
+    /// Rebuilds the card on the next idle, once: never inside the click handler of a button that the
+    /// rebuild destroys, and several changes in a row cost one rebuild.
     _render() {
+        if (this._renderId || this._destroyed)
+            return;
+        this._renderId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._renderId = null;
+            if (!this._destroyed)
+                this._renderNow();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    /// Moves keyboard focus off widgets that are about to be destroyed (a focused text entry
+    /// destroyed under an input method has crashed GNOME Shell before).
+    _releaseFocus(container) {
+        const focus = global.stage.get_key_focus();
+        if (focus && container.contains(focus))
+            global.stage.set_key_focus(this.menu.isOpen ? this.menu.actor : null);
+    }
+
+    _renderNow() {
         this._stopBreath();
+        this._releaseFocus(this._card);
         this._card.destroy_all_children();
         this._bigTime = this._bar = this._breath = this._ring = null;
         this._taskEntry = this._notesEntry = this._search = this._clipBox = this._heatInfo = null;
@@ -628,7 +670,7 @@ class Indicator extends PanelMenu.Button {
         const cb = St.Clipboard.get_default();
         const done = () => {
             if (this.menu.isOpen && this._clipBox)
-                this._fillClips();
+                this._fillClipsSoon();
         };
         const canContent = typeof cb.get_content === 'function';
         if (canContent && mimes.includes('x-special/gnome-copied-files')) {
@@ -643,10 +685,8 @@ class Indicator extends PanelMenu.Button {
         }
         if (canContent && mimes.includes('image/png')) {
             cb.get_content(CLIPBOARD, 'image/png', (_c, bytes) => {
-                if (bytes && bytes.get_size() > 0 && bytes.get_size() < 25_000_000 && !this._destroyed) {
-                    this._clips.addImage(bytes, app);
-                    done();
-                }
+                if (bytes && bytes.get_size() > 0 && bytes.get_size() < 25_000_000 && !this._destroyed)
+                    this._clips.addImage(bytes, app, done);
             });
             return;
         }
@@ -666,7 +706,7 @@ class Indicator extends PanelMenu.Button {
         });
         this._search.clutter_text.connect('text-changed', () => {
             this._query = this._search.get_text();
-            this._fillClips();
+            this._fillClipsSoon(150);
         });
         this._card.add_child(this._search);
         this._card.add_child(UI.row(Core.CLIP_FILTERS.map(f => UI.chip(f, this._filter === f, () => {
@@ -684,15 +724,28 @@ class Indicator extends PanelMenu.Button {
     _visibleClips() {
         if (this._filter === 'Screenshots') {
             const q = this._query.trim().toLowerCase();
-            return Store.listScreenshots(this._large ? 40 : 12)
+            return Store.listScreenshots(this._large ? 30 : 12)
                 .filter(s => !q || s.name.toLowerCase().includes(q))
                 .map(s => ({id: s.path, kind: 'screenshot', path: s.path, name: s.name, mtime: s.mtime * 1000}));
         }
-        return Core.clipVisible(this._clips.items, this._filter, this._query).slice(0, this._large ? 60 : 12);
+        return Core.clipVisible(this._clips.items, this._filter, this._query).slice(0, this._large ? 30 : 12);
+    }
+
+    /// Refills the list shortly (typing, pins, new copies), coalesced into one refill.
+    _fillClipsSoon(ms = 0) {
+        if (this._fillId)
+            GLib.source_remove(this._fillId);
+        this._fillId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            this._fillId = null;
+            if (!this._destroyed && this._clipBox)
+                this._fillClips();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _fillClips() {
         const box = this._clipBox;
+        this._releaseFocus(box);
         box.destroy_all_children();
         const cols = this._large ? 2 : 1;
         const columns = Array.from({length: cols}, () => UI.column([], 'spacing: 6px;'));
@@ -716,9 +769,10 @@ class Indicator extends PanelMenu.Button {
         if (item.kind === 'image' || item.kind === 'screenshot') {
             const path = item.kind === 'image' ? this._clips.imagePath(item) : item.path;
             const caption = item.kind === 'image' ? Core.clipPreview(item) : item.name;
-            content = UI.row([UI.imageTile(path, large ? 96 : 72, large ? 64 : 48), UI.wrapLabel(caption, 'gnotch-text', 2)], 'spacing: 8px;');
+            content = UI.row([UI.imageTile(path, large ? 96 : 72, large ? 64 : 48, Store.thumbnail),
+                UI.wrapLabel(caption, 'gnotch-text', 2, large ? 170 : 160)], 'spacing: 8px;');
         } else {
-            content = UI.wrapLabel(Core.clipPreview(item), 'gnotch-text', large ? 3 : 2);
+            content = UI.wrapLabel(Core.clipPreview(item), 'gnotch-text', large ? 3 : 2, large ? 260 : 250);
         }
         const when = item.kind === 'screenshot' ? item.mtime : Core.parseDate(item.date);
         const meta = [Core.relativeTime(when, now), item.sourceApp].filter(Boolean).join(' · ');
@@ -732,11 +786,11 @@ class Indicator extends PanelMenu.Button {
             return main;
         const pin = UI.iconButton(item.pinned ? 'starred-symbolic' : 'non-starred-symbolic', () => {
             this._clips.togglePin(item.id);
-            this._fillClips();
+            this._fillClipsSoon();
         }, {tooltip: item.pinned ? 'Unpin' : 'Pin'});
         const del = UI.iconButton('edit-delete-symbolic', () => {
             this._clips.remove(item.id);
-            this._fillClips();
+            this._fillClipsSoon();
         }, {tooltip: 'Delete'});
         return UI.row([main, UI.column([pin, del], 'spacing: 2px;')], 'spacing: 4px;');
     }
@@ -804,9 +858,10 @@ class Indicator extends PanelMenu.Button {
                 style: `width: ${w - 4 - (note ? 20 : 0)}px; height: ${h - 4 - (note ? 16 : 0)}px;`, can_focus: true,
             });
             if (!note)
-                tile.set_child(UI.imageTile(this._vision.imagePath(item), w - 4, h - 4));
+                tile.set_child(UI.imageTile(this._vision.imagePath(item), w - 4, h - 4, Store.thumbnail));
             else
-                tile.set_child(UI.wrapLabel(item.text ?? '', large ? 'gnotch-note-text-large' : 'gnotch-note-text', Math.max(2, s.rows * (large ? 4 : 2))));
+                tile.set_child(UI.wrapLabel(item.text ?? '', large ? 'gnotch-note-text-large' : 'gnotch-note-text',
+                    Math.max(2, s.rows * (large ? 4 : 2)), Math.max(20, w - 24)));
             tile.connect('clicked', () => {
                 this._selected = on ? null : item.id;
                 this._render();
@@ -847,10 +902,8 @@ class Indicator extends PanelMenu.Button {
         const mimes = cb.get_mimetypes?.(CLIPBOARD) ?? [];
         if (mimes.includes('image/png') && cb.get_content) {
             cb.get_content(CLIPBOARD, 'image/png', (_c, bytes) => {
-                if (bytes && bytes.get_size() > 0) {
-                    this._vision.addImageBytes(bytes.get_data());
-                    this._render();
-                }
+                if (bytes && bytes.get_size() > 0 && bytes.get_size() < 25_000_000)
+                    this._vision.addImageBytes(bytes, () => this._render());
             });
             return;
         }
@@ -888,6 +941,11 @@ class Indicator extends PanelMenu.Button {
     destroy() {
         this._destroyed = true;
         this._stopBreath();
+        for (const id of [this._renderId, this._fillId]) {
+            if (id)
+                GLib.source_remove(id);
+        }
+        this._renderId = this._fillId = null;
         if (this._tickId)
             GLib.source_remove(this._tickId);
         for (const id of this._timeouts)
@@ -915,6 +973,26 @@ export default class GNotchExtension extends Extension {
         this._grab('<Control><Alt>b', () => this._indicator.showPage('vision'));
         this._grab('<Control><Alt>p', () => this._indicator.togglePause());
         this._accelId = global.display.connect('accelerator-activated', (_d, action) => this._accels.get(action)?.());
+
+        // The app launcher asks for a page over D-Bus (GNOME Shell owns the session bus name).
+        this._dbus = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, {
+            Show: page => this._showFromLauncher(page),
+            TogglePause: () => this._indicator?.togglePause(),
+        });
+        this._dbus.export(Gio.DBus.session, DBUS_PATH);
+    }
+
+    /// Launched from Activities, the overview is still open: open the card once it has slid away.
+    _showFromLauncher(page) {
+        if (Main.overview.visible) {
+            const id = Main.overview.connect('hidden', () => {
+                Main.overview.disconnect(id);
+                this._indicator?.openPage(page);
+            });
+            Main.overview.hide();
+        } else {
+            this._indicator?.openPage(page);
+        }
     }
 
     /// Center by default: right after the clock, the closest thing Ubuntu has to the notch.
@@ -945,6 +1023,8 @@ export default class GNotchExtension extends Extension {
     }
 
     disable() {
+        this._dbus?.unexport();
+        this._dbus = null;
         if (this._accelId)
             global.display.disconnect(this._accelId);
         for (const action of this._accels?.keys() ?? []) {

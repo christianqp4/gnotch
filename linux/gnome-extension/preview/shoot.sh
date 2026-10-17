@@ -12,6 +12,8 @@ while read -r s h; do
   echo "docs/gnome-$s.png"
 done <<'LIST'
 placement 440
+launcher 400
+dock-menu 420
 idle 680
 idle-calendar 700
 idle-hover 680

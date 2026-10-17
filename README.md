@@ -173,6 +173,8 @@ Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Reso
 
 ## Roadmap
 
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+
 - [x] Ubuntu: GNOME Shell extension with timer, drifts, places, heatmap, clipboard and vision board ([linux/gnome-extension](linux/gnome-extension/README.md))
 - [ ] Ubuntu: dashboard/log window and past blocks
 

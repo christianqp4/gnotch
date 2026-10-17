@@ -31,12 +31,25 @@
 .gnotch-chip-on { background-color: #29c26e; color: #04220f; }
 
 .gnotch-cell { border-radius: 2px; }
+.gnotch-cell-8 { width: 8px; height: 8px; }
+.gnotch-cell-9 { width: 9px; height: 9px; }
+.gnotch-heat-none { background-color: transparent; }
+.gnotch-heat-0 { background-color: rgba(255, 255, 255, 0.08); }
+.gnotch-heat-1 { background-color: rgba(41, 194, 110, 0.30); }
+.gnotch-heat-2 { background-color: rgba(41, 194, 110, 0.52); }
+.gnotch-heat-3 { background-color: rgba(41, 194, 110, 0.76); }
+.gnotch-heat-4 { background-color: rgb(41, 194, 110); }
+/* Borders are drawn outside the size, so outlined cells are 2px smaller. */
+.gnotch-heat-future { background-color: transparent; border: 1px solid rgba(255, 255, 255, 0.14); }
+.gnotch-heat-today { border: 1px solid rgba(255, 255, 255, 0.85); }
+.gnotch-cell-8.gnotch-heat-future, .gnotch-cell-8.gnotch-heat-today { width: 6px; height: 6px; }
+.gnotch-cell-9.gnotch-heat-future, .gnotch-cell-9.gnotch-heat-today { width: 7px; height: 7px; }
 
 .gnotch-clip { padding: 8px 10px; border-radius: 10px; background-color: rgba(255, 255, 255, 0.06); text-align: left; }
 .gnotch-clip:hover, .gnotch-clip:focus { background-color: rgba(255, 255, 255, 0.13); }
 .gnotch-clip-pinned { border: 1px solid rgba(41, 194, 110, 0.6); }
 
-.gnotch-image { border-radius: 8px; background-size: cover; background-position: center; background-color: rgba(255, 255, 255, 0.06); }
+.gnotch-image { border-radius: 8px; background-size: cover; background-position: center; background-color: rgba(255, 255, 255, 0.08); }
 
 .gnotch-tile { padding: 0; border-radius: 12px; border: 2px solid transparent; }
 .gnotch-tile:hover { border-color: rgba(255, 255, 255, 0.35); }
