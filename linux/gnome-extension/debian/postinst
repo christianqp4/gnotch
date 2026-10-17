@@ -1,0 +1,25 @@
+#!/bin/sh
+# Links the build that fits this GNOME (42–44 or 45+) into GNOME's system extensions folder.
+set -e
+UUID=gnotch@christianqp4.github.io
+LIB=/usr/share/gnotch
+EXT=/usr/share/gnome-shell/extensions/$UUID
+
+major=$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)
+variant=45
+if [ -n "$major" ] && [ "$major" -lt 45 ]; then
+  variant=42
+fi
+mkdir -p /usr/share/gnome-shell/extensions
+rm -rf "$EXT"
+ln -s "$LIB/build/$variant/$UUID" "$EXT"
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications || true
+fi
+
+echo "GNotch installed for GNOME ${major:-45+}. Open GNotch from your apps once, then log out and back in."
+exit 0

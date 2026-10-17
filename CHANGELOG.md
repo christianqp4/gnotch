@@ -2,6 +2,12 @@
 
 GNotch ships as two apps sharing one data format: the macOS app (tags `vX.Y.Z`) and the Ubuntu / GNOME Shell extension (tags `gnome-vX.Y.Z`). Downloads are on the repo's Releases page.
 
+## Ubuntu 0.6.2 · 2026-10-17
+
+**New: a `.deb` package**, next to the zip. Double-click it and choose **Install** in App Center (or `sudo apt install ./gnotch_0.6.2_all.deb`); remove it with `sudo apt remove gnotch`. It installs for every user, adds GNotch to your apps, and puts `gnotch` on the PATH (`gnotch clipboard` opens the clipboard page). The README explains both ways to install and how installing works on Ubuntu.
+- Opening GNotch from your apps right after installing switches the extension on and tells you to log out and back in once.
+- No code changes in the extension itself since 0.6.1.
+
 ## Ubuntu 0.6.1 · 2026-10-17
 
 **Fixed: switching to the clipboard page froze GNOME 42 and ended the session.**

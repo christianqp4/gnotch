@@ -1,0 +1,28 @@
+[Desktop Entry]
+Type=Application
+Name=GNotch
+GenericName=Deep work timer
+Comment=Deep-work timer, clipboard history and vision board in the top bar
+Icon=gnotch
+Exec=@LAUNCH@ timer
+Terminal=false
+StartupNotify=false
+Categories=Utility;
+Keywords=deep work;focus;timer;pomodoro;drift;clipboard;vision board;notch;
+Actions=timer;clipboard;vision;drift;
+
+[Desktop Action timer]
+Name=Timer
+Exec=@LAUNCH@ timer
+
+[Desktop Action clipboard]
+Name=Clipboard
+Exec=@LAUNCH@ clipboard
+
+[Desktop Action vision]
+Name=Vision board
+Exec=@LAUNCH@ vision
+
+[Desktop Action drift]
+Name=I drifted (pause / resume)
+Exec=@LAUNCH@ drift

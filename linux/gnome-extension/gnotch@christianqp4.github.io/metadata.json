@@ -4,5 +4,5 @@
   "description": "The GNotch notch app in the top bar: deep-work timer with drift tracker, breathing guide and heatmap, clipboard history and a vision board. Shares its data formats with GNotch for macOS.",
   "shell-version": ["45", "46", "47", "48", "49"],
   "url": "https://github.com/christianqp4/gnotch",
-  "version-name": "0.6.1"
+  "version-name": "0.6.2"
 }

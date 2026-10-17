@@ -4,9 +4,9 @@ The Gears notch app for macOS: a deep-work timer with intensity log and heatmap,
 
 ## Status
 <!-- gears:status: read by the GearsOS dashboard. Update it at the end of any session that changes where this project stands. -->
-- **Stage:** v0.6.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P), place tags, heatmap in year or calendar view (ISO week numbers, hover a day for its blocks), clipboard with Ubuntu-style screenshots, widget vision board · Ubuntu: GNOME Shell extension (GNOME 42–49) with the same three pages, big mode and progress around the indicator in `linux/gnome-extension`; 0.6.0 froze GNOME 42 and ended the session when switching to the clipboard page (scroll view attached with set_child); 0.6.1 fixes that, hardens rendering and adds an app launcher, not yet tried on Ubuntu
+- **Stage:** v0.6.0 · installed in /Applications · timer with drift tracker (pause = drift, breathing guide, ⌃⌥P), place tags, heatmap in year or calendar view (ISO week numbers, hover a day for its blocks), clipboard with Ubuntu-style screenshots, widget vision board · Ubuntu: GNOME Shell extension (GNOME 42–49) with the same three pages, big mode and progress around the indicator in `linux/gnome-extension`; 0.6.0 froze GNOME 42 and ended the session when switching to the clipboard page (scroll view attached with set_child); 0.6.1 fixes that, hardens rendering and adds an app launcher; 0.6.2 also ships as a .deb (built and test-installed in CI); not yet tried on Ubuntu
 - **Gate:** in-use
-- **Next:** Try GNOME 0.6.1 on Ubuntu (clipboard, vision board, hover, breathing) and fix what breaks. Log a week of real deep-work blocks (watch drifts per hour), then decide whether the Gears HUD watch companion is worth building.
+- **Next:** Try GNOME 0.6.2 on Ubuntu (.deb install too) (clipboard, vision board, hover, breathing) and fix what breaks. Log a week of real deep-work blocks (watch drifts per hour), then decide whether the Gears HUD watch companion is worth building.
 - **Updated:** 2026-10-17
 <!-- /gears:status -->
 

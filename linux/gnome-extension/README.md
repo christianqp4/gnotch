@@ -23,7 +23,7 @@ Works on GNOME 42 to 49: **Ubuntu 22.04 LTS**, 23.04, 23.10, **24.04 LTS**, 24.1
 
 *These are mock-ups rendered from `preview/preview.html` (same texts, sizes and colors as the extension; the heatmaps come from the extension's own `core.js`), not live captures. Regenerate with `preview/shoot.sh`.*
 
-## What's in it (v0.6.1)
+## What's in it (v0.6.2)
 
 | | |
 |---|---|
@@ -58,20 +58,33 @@ Not in the Ubuntu version yet: the dashboard/log window, adding past blocks and 
 
 ## Install
 
-1. Download `gnotch-gnome-<version>.zip` from the repo's **Releases** page (you need to be a collaborator on the private repo).
-2. Unzip it and run the installer:
-   ```bash
-   unzip gnotch-gnome-*.zip -d gnotch && cd gnotch && ./install.sh
-   ```
-3. **Log out and back in** (on Wayland, GNOME only loads new extensions at login).
-4. If the icon isn't in the top bar yet: `gnome-extensions enable gnotch@christianqp4.github.io`
-5. Still nothing? `gnome-extensions info gnotch@christianqp4.github.io` shows its state (`ERROR` or `OUT OF DATE` say why).
+Each release on the repo's **Releases** page has two downloads (you need to be a collaborator on the private repo to see them). They install the same GNotch; pick one.
 
-The installer also adds **GNotch to your apps** (Activities search, app grid, dock). The launcher doesn't start a separate program: GNotch runs inside GNOME Shell, and the icon just opens its card.
+| | **`.deb` package** (easiest) | **`.zip` + `install.sh`** |
+|---|---|---|
+| What it is | Ubuntu's installer format, the closest thing to a Windows `.exe` installer | A folder with a script: a text file listing the install steps |
+| How | Double-click it, then **Install** in App Center (or `sudo apt install ./gnotch_*.deb`) | Unzip it, then run `./install.sh` in a terminal |
+| Installs for | Every user on the computer (asks for your password) | Only you (no password) |
+| Update | Install the newer `.deb` | Run the newer `install.sh` |
+| Remove | `sudo apt remove gnotch` | `./install.sh --uninstall` |
 
-Update: same steps with the new zip. Uninstall: `./install.sh --uninstall` (removes the extension and the launcher; your data stays in `~/.local/share/gnotch`).
+Either way, then:
 
-From a clone instead of a zip: `./linux/gnome-extension/install.sh` (needs Node.js to build first).
+1. **Log out and back in once.** GNOME only loads new extensions when you log in.
+2. GNotch appears **next to the clock**, and in your apps: search "GNotch" in Activities. If it's not next to the clock after logging in, open GNotch from your apps once (that switches it on), then log out and in again.
+3. Still nothing? `gnome-extensions info gnotch@christianqp4.github.io` shows its state (`ERROR` or `OUT OF DATE` say why).
+
+Your data (`~/.local/share/gnotch`) is never touched by installing, updating or removing. Use one method, not both: if you switch, remove the other one first.
+
+### How installing works on Ubuntu (in short)
+
+- **There's no `.exe` on Ubuntu.** Programs come as `.deb` packages (installed by App Center / `apt`), as Snap or Flatpak apps from the store, or as AppImages (one portable file).
+- **GNotch isn't a separate program.** It's a GNOME Shell *extension*: a piece of code that GNOME itself loads, which is how it can live in the top bar next to the clock. That's why it needs a log-out the first time, and why there's no AppImage, Snap or Flatpak version (those are for standalone apps).
+- **Installing just puts files in the right places:** the extension where GNOME looks for extensions (`~/.local/share/gnome-shell/extensions/` from the zip, `/usr/share/gnome-shell/extensions/` from the `.deb`), plus a launcher and an icon so it shows up in your apps. The zip and the `.deb` do the same thing; the `.deb` lets App Center do it.
+- **The app icon doesn't start anything:** GNotch is already running inside GNOME, and the icon just opens its card (`gnotch-launch` asks the extension over D-Bus). From a terminal, `gnotch clipboard` does the same after a `.deb` install.
+- **Two builds inside:** GNOME 45 changed how extensions are loaded, so both downloads carry a build for GNOME 42–44 (Ubuntu 22.04) and one for 45+, and pick the right one when installing.
+
+From a clone of the repo instead of a download: `./linux/gnome-extension/install.sh` (needs Node.js to build first).
 
 ## Data
 
@@ -95,6 +108,9 @@ gnotch@christianqp4.github.io/
   ui.js          St widgets: buttons, chips, progress outline and ring, heatmaps
   stylesheet.css
 preview/         HTML mock-up + shoot.sh for the README images (docs/)
+gnotch.desktop.in  the app launcher entry (shared by install.sh and the .deb)
+debian/          postinst / postrm for the .deb
+package.sh, package-deb.sh   build the .zip and the .deb (the .deb needs dpkg-deb: Ubuntu or CI)
 build.mjs        makes build/45 (a copy) and build/42 (converted to GNOME 42's old imports.* modules)
 test/core.test.mjs
 install.sh, package.sh
@@ -115,4 +131,4 @@ linux/gnome-extension/package.sh                       # builds dist/gnotch-gnom
 
 To try changes on Ubuntu: `./install.sh`, then on Xorg press Alt+F2 and type `r`; on Wayland run a nested shell (`dbus-run-session -- gnome-shell --nested --wayland` on GNOME 45–48, `--devkit` on 49) or log out and in. Logs: `journalctl -f -o cat /usr/bin/gnome-shell`.
 
-**Release**: bump `version-name` in metadata.json and push a tag like `gnome-v0.5.1`. The GitHub workflow runs the tests, builds the zip and attaches it to a release.
+**Release**: bump `version-name` in metadata.json, add the version to CHANGELOG.md (`## Ubuntu X.Y.Z · date`), and push a tag like `gnome-v0.6.2`. The GitHub workflow runs the tests, builds the zip and the `.deb`, test-installs and removes the `.deb` on Ubuntu, then publishes both with that CHANGELOG section as the notes.

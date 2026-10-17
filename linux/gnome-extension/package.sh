@@ -6,5 +6,5 @@ UUID="gnotch@christianqp4.github.io"
 node build.mjs >/dev/null
 VERSION="$(node -p "require('./$UUID/metadata.json')['version-name']")"
 rm -rf dist && mkdir -p dist
-zip -qr "dist/gnotch-gnome-$VERSION.zip" build install.sh README.md -x '*.DS_Store'
+zip -qr "dist/gnotch-gnome-$VERSION.zip" build install.sh gnotch.desktop.in README.md -x '*.DS_Store'
 echo "dist/gnotch-gnome-$VERSION.zip"

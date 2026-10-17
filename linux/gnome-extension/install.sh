@@ -18,6 +18,12 @@ refresh_launchers() {
   gtk-update-icon-cache -f -t "$ICONS" >/dev/null 2>&1 || true
 }
 
+if [ -e /usr/share/gnome-shell/extensions/$UUID ] && [ "${1:-}" != "--uninstall" ]; then
+  echo "GNotch is already installed from the .deb package. Update it with the new .deb instead" >&2
+  echo "(or remove it first: sudo apt remove gnotch)." >&2
+  exit 1
+fi
+
 if [ "${1:-}" = "--uninstall" ]; then
   gnome-extensions disable "$UUID" 2>/dev/null || true
   rm -rf "$DEST"
@@ -54,36 +60,7 @@ echo "Installed GNotch for GNOME $MAJOR to $DEST"
 mkdir -p "$APPS" "$ICONS/256x256/apps"
 cp "$DEST/icons/gnotch.png" "$ICONS/256x256/apps/gnotch.png"
 LAUNCH="$DEST/gnotch-launch"
-cat > "$DESKTOP" <<DESKTOP
-[Desktop Entry]
-Type=Application
-Name=GNotch
-GenericName=Deep work timer
-Comment=Deep-work timer, clipboard history and vision board in the top bar
-Icon=gnotch
-Exec="$LAUNCH" timer
-Terminal=false
-StartupNotify=false
-Categories=Utility;
-Keywords=deep work;focus;timer;pomodoro;drift;clipboard;vision board;notch;
-Actions=timer;clipboard;vision;drift;
-
-[Desktop Action timer]
-Name=Timer
-Exec="$LAUNCH" timer
-
-[Desktop Action clipboard]
-Name=Clipboard
-Exec="$LAUNCH" clipboard
-
-[Desktop Action vision]
-Name=Vision board
-Exec="$LAUNCH" vision
-
-[Desktop Action drift]
-Name=I drifted (pause / resume)
-Exec="$LAUNCH" drift
-DESKTOP
+sed "s|@LAUNCH@|\"$LAUNCH\"|g" "$HERE/gnotch.desktop.in" > "$DESKTOP"
 refresh_launchers
 echo "Added GNotch to your apps: search for it in Activities, or pin it to the dock."
 
