@@ -38,5 +38,5 @@ Description: GNotch: deep-work timer, clipboard and vision board in the top bar
 CONTROL
 
 mkdir -p dist
-dpkg-deb --root-owner-group --build "$ROOT" "dist/gnotch_${VERSION}_all.deb" >/dev/null
+dpkg-deb --root-owner-group -Zxz --build "$ROOT" "dist/gnotch_${VERSION}_all.deb" >/dev/null
 echo "dist/gnotch_${VERSION}_all.deb"

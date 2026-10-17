@@ -36,6 +36,8 @@ jobs:
           deb="${{ steps.deb.outputs.deb }}"
           dpkg-deb --info "$deb"
           dpkg-deb --contents "$deb"
+          # xz, not zstd: every Ubuntu and Debian dpkg reads it.
+          ar t "$deb" | tee /dev/stderr | grep -qx 'data.tar.xz'
           # The runner has no GNOME, so skip the dependency check; postinst falls back to the 45+ build.
           sudo dpkg -i --force-depends "$deb"
           ext=/usr/share/gnome-shell/extensions/gnotch@christianqp4.github.io

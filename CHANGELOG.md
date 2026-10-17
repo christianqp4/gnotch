@@ -2,9 +2,21 @@
 
 GNotch ships as two apps sharing one data format: the macOS app (tags `vX.Y.Z`) and the Ubuntu / GNOME Shell extension (tags `gnome-vX.Y.Z`). Downloads are on the repo's Releases page.
 
+## Ubuntu 0.6.3 · 2026-10-17
+
+**Fixed: the `.deb` instructions.** On Ubuntu 22.04, double-clicking a `.deb` opens it in the Archive Manager (which just shows `control.tar`, `data.tar` and `debian-binary`) instead of installing it. Install it with:
+
+```
+sudo apt install ./gnotch_0.6.3_all.deb
+```
+
+Or, for double-click installs, `sudo apt install gdebi` once and open the `.deb` with GDebi.
+- The `.deb` is now compressed with xz (it was zstd, the default where CI builds it), which every Ubuntu and Debian version reads.
+- No changes in the extension itself.
+
 ## Ubuntu 0.6.2 · 2026-10-17
 
-**New: a `.deb` package**, next to the zip. Double-click it and choose **Install** in App Center (or `sudo apt install ./gnotch_0.6.2_all.deb`); remove it with `sudo apt remove gnotch`. It installs for every user, adds GNotch to your apps, and puts `gnotch` on the PATH (`gnotch clipboard` opens the clipboard page). The README explains both ways to install and how installing works on Ubuntu.
+**New: a `.deb` package**, next to the zip. Install it with `sudo apt install ./gnotch_0.6.2_all.deb` (double-clicking only opens it on 22.04, see 0.6.3); remove it with `sudo apt remove gnotch`. It installs for every user, adds GNotch to your apps, and puts `gnotch` on the PATH (`gnotch clipboard` opens the clipboard page). The README explains both ways to install and how installing works on Ubuntu.
 - Opening GNotch from your apps right after installing switches the extension on and tells you to log out and back in once.
 - No code changes in the extension itself since 0.6.1.
 

@@ -23,7 +23,7 @@ Works on GNOME 42 to 49: **Ubuntu 22.04 LTS**, 23.04, 23.10, **24.04 LTS**, 24.1
 
 *These are mock-ups rendered from `preview/preview.html` (same texts, sizes and colors as the extension; the heatmaps come from the extension's own `core.js`), not live captures. Regenerate with `preview/shoot.sh`.*
 
-## What's in it (v0.6.2)
+## What's in it (v0.6.3)
 
 | | |
 |---|---|
@@ -60,13 +60,15 @@ Not in the Ubuntu version yet: the dashboard/log window, adding past blocks and 
 
 Each release on the repo's **Releases** page has two downloads (you need to be a collaborator on the private repo to see them). They install the same GNotch; pick one.
 
-| | **`.deb` package** (easiest) | **`.zip` + `install.sh`** |
+| | **`.deb` package** | **`.zip` + `install.sh`** |
 |---|---|---|
-| What it is | Ubuntu's installer format, the closest thing to a Windows `.exe` installer | A folder with a script: a text file listing the install steps |
-| How | Double-click it, then **Install** in App Center (or `sudo apt install ./gnotch_*.deb`) | Unzip it, then run `./install.sh` in a terminal |
+| What it is | Ubuntu's package format, the closest thing to a Windows `.exe` installer | A folder with a script: a text file listing the install steps |
+| How | In a terminal, in the folder where you downloaded it: `sudo apt install ./gnotch_*.deb` (see below) | Unzip it, then run `./install.sh` in a terminal |
 | Installs for | Every user on the computer (asks for your password) | Only you (no password) |
 | Update | Install the newer `.deb` | Run the newer `install.sh` |
 | Remove | `sudo apt remove gnotch` | `./install.sh --uninstall` |
+
+**About double-clicking the `.deb`:** on Ubuntu 22.04 a double-click opens it in the Archive Manager, which only shows what's inside (`control.tar.xz`, `data.tar.xz`, `debian-binary`: the three parts every `.deb` is made of). That doesn't install anything. Use the `apt` command above. If you want double-click installs, install GDebi once (`sudo apt install gdebi`), then right-click the `.deb` → **Open With → GDebi Package Installer** → **Install Package**. On newer Ubuntu versions, App Center may offer to install it directly.
 
 Either way, then:
 
@@ -78,9 +80,9 @@ Your data (`~/.local/share/gnotch`) is never touched by installing, updating or 
 
 ### How installing works on Ubuntu (in short)
 
-- **There's no `.exe` on Ubuntu.** Programs come as `.deb` packages (installed by App Center / `apt`), as Snap or Flatpak apps from the store, or as AppImages (one portable file).
+- **There's no `.exe` on Ubuntu.** Programs come as `.deb` packages (installed by `apt`, or by App Center on newer versions), as Snap or Flatpak apps from the store, or as AppImages (one portable file). A `.deb` is an archive, which is why the Archive Manager can open it; `apt` is what installs it.
 - **GNotch isn't a separate program.** It's a GNOME Shell *extension*: a piece of code that GNOME itself loads, which is how it can live in the top bar next to the clock. That's why it needs a log-out the first time, and why there's no AppImage, Snap or Flatpak version (those are for standalone apps).
-- **Installing just puts files in the right places:** the extension where GNOME looks for extensions (`~/.local/share/gnome-shell/extensions/` from the zip, `/usr/share/gnome-shell/extensions/` from the `.deb`), plus a launcher and an icon so it shows up in your apps. The zip and the `.deb` do the same thing; the `.deb` lets App Center do it.
+- **Installing just puts files in the right places:** the extension where GNOME looks for extensions (`~/.local/share/gnome-shell/extensions/` from the zip, `/usr/share/gnome-shell/extensions/` from the `.deb`), plus a launcher and an icon so it shows up in your apps. The zip and the `.deb` do the same thing; with the `.deb`, `apt` does it and keeps track of it, so it can remove it cleanly.
 - **The app icon doesn't start anything:** GNotch is already running inside GNOME, and the icon just opens its card (`gnotch-launch` asks the extension over D-Bus). From a terminal, `gnotch clipboard` does the same after a `.deb` install.
 - **Two builds inside:** GNOME 45 changed how extensions are loaded, so both downloads carry a build for GNOME 42–44 (Ubuntu 22.04) and one for 45+, and pick the right one when installing.
 
@@ -131,4 +133,4 @@ linux/gnome-extension/package.sh                       # builds dist/gnotch-gnom
 
 To try changes on Ubuntu: `./install.sh`, then on Xorg press Alt+F2 and type `r`; on Wayland run a nested shell (`dbus-run-session -- gnome-shell --nested --wayland` on GNOME 45–48, `--devkit` on 49) or log out and in. Logs: `journalctl -f -o cat /usr/bin/gnome-shell`.
 
-**Release**: bump `version-name` in metadata.json, add the version to CHANGELOG.md (`## Ubuntu X.Y.Z · date`), and push a tag like `gnome-v0.6.2`. The GitHub workflow runs the tests, builds the zip and the `.deb`, test-installs and removes the `.deb` on Ubuntu, then publishes both with that CHANGELOG section as the notes.
+**Release**: bump `version-name` in metadata.json, add the version to CHANGELOG.md (`## Ubuntu X.Y.Z · date`), and push a tag like `gnome-v0.6.3`. The GitHub workflow runs the tests, builds the zip and the `.deb`, test-installs and removes the `.deb` on Ubuntu, then publishes both with that CHANGELOG section as the notes.
