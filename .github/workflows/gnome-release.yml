@@ -1,10 +1,12 @@
-# Tests the GNOME extension on every push; on a tag like gnome-v0.5.0 it also publishes
-# gnotch-gnome-<version>.zip as a GitHub release (visible to collaborators of this private repo).
+# Tests the GNOME extension and its .deb on every push to main that touches it; on a tag like
+# gnome-v0.6.2 it also publishes the .zip and the .deb as a GitHub release (visible to collaborators
+# of this private repo). With only `tags` listed, branch pushes wouldn't run it at all.
 name: GNOME extension
 
 on:
   push:
-    paths: ['linux/gnome-extension/**', '.github/workflows/gnome-release.yml']
+    branches: [main]
+    paths: ['linux/gnome-extension/**', 'CHANGELOG.md', '.github/workflows/gnome-release.yml']
     tags: ['gnome-v*']
   workflow_dispatch:
 
