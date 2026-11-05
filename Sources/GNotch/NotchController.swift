@@ -108,7 +108,7 @@ enum NotchLayout {
                 // Month calendars are taller than the year grid.
                 let calendar = UserDefaults.standard.string(forKey: "heatStyle") == HeatStyle.calendar.rawValue
                 return state.large ? CGSize(width: 760, height: notch.height + (calendar ? 548 : 456))
-                                   : CGSize(width: 480, height: notch.height + (calendar ? 210 : 206))
+                                   : CGSize(width: 480, height: notch.height + (calendar ? 232 : 228))
             case .running, .paused:
                 return state.large ? CGSize(width: 760, height: notch.height + 238)
                                    : CGSize(width: 480, height: notch.height + 126)
@@ -149,7 +149,7 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
 
     init(engine: TimerEngine, store: SessionStore, clips: ClipboardStore, vision: VisionStore,
-         shots: ScreenshotLibrary, ambient: AmbientPlayer,
+         shots: ScreenshotLibrary, ambient: AmbientPlayer, timeline: TimelineStore,
          openLog: @escaping () -> Void, addPast: @escaping () -> Void) {
         self.engine = engine
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
@@ -168,6 +168,7 @@ final class NotchController {
         let state = self.state
         let root = NotchRootView(
             engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state, ambient: ambient,
+            timeline: timeline,
             openLog: openLog, addPast: addPast,
             collapse: { [weak self] in self?.collapse() },
             onDrop: { zone, providers in

@@ -42,6 +42,7 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 - **Big mode (⤢).** The timer page grows into a focus screen: large countdown ring, today's blocks, stats and the full-year heatmap. In big mode the notch stays open while a block runs (Esc or ⌃ to tuck it away).
 - **Sounds.** Soft system sounds on start, pause, goal and save (toggle: menu bar → *Timer Sounds*). Optional **focus sound** while a block runs: brown, pink or white noise, or ocean waves, generated live with no audio files. It fades out when you pause.
 - **Add past blocks.** Worked in the library, or forgot to start the timer? *Add past block* (in the notch or the dashboard): start time, duration (quick 25m…4h buttons), intensity, feelings, notes. It warns if the block overlaps one already logged. Manual blocks show a ✎ in the log, and any block's times can be edited later.
+- **Today's timeline.** A line under the notch heatmap says when the Mac was first opened today (boot, login, wake or screen on) and when Claude first opened, e.g. *On past midnight · opened 02:14 · Claude 14:18*, with a midnight-to-midnight strip (green while the Mac was on, white ticks where an app opened). Hover it for the list: screen on/off, sleep/wake, shutdown, boot, login, app opens. macOS Screen Time doesn't show this. GNotch logs these moments itself while it runs and fills in the hours before it started from the system (boot, shutdown and logins as `last` sees them, screen and sleep/wake from `pmset -g log`, the launch time of apps still running). Watch other apps with `defaults write com.christianqp4.GNotch timelineApps -array com.anthropic.claudefordesktop com.apple.Safari`.
 - **Survives restarts.** A running block is saved, so quitting or rebooting doesn't lose it. The timer auto-pauses when the Mac sleeps.
 
 <img src="docs/notch-timer-large.png" width="700" alt="Big timer page, year view">
@@ -140,6 +141,8 @@ Everything is local, in one human-readable file:
 
 `duration` is in active seconds, excluding pauses. `pauses` lists the drifts (`"auto": true` marks a pause caused by the Mac sleeping); it's missing on blocks logged before drift tracking and on blocks added by hand. `manual: true` marks blocks added by hand. `location` is the place tag (optional). The format is deliberately simple so other clients (e.g. the Gears HUD watch app) can read and append to it. You can also export it as CSV from the dashboard.
 
+Today's timeline is logged next to it in `timeline.jsonl`, one event per line, e.g. `{"date":"2026-10-24T12:18:43Z","kind":"launch","app":"Claude"}` (kinds: `boot`, `login`, `wake`, `sleep`, `displayOn`, `displayOff`, `shutdown`, `launch`, `quit`).
+
 ## Development
 
 ```
@@ -159,6 +162,7 @@ Sources/GNotch/
   SessionStore.swift     JSON persistence + stats
   DashboardView.swift    stats, heatmap card, log, editor
   HeatmapView.swift      year grid and month calendars, week numbers, hover card
+  DayTimeline.swift      today's timeline: event log, system sources (wtmp, pmset), strip and hover list
   Components.swift       shared pieces (notch shape, intensity picker, tags…)
   Snapshots.swift        renders UI states to PNG with sample data
 ```

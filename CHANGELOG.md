@@ -2,6 +2,10 @@
 
 GNotch ships as two apps sharing one data format: the macOS app (tags `vX.Y.Z`) and the Ubuntu / GNOME Shell extension (tags `gnome-vX.Y.Z`). Downloads are on the repo's Releases page.
 
+## Unreleased (macOS)
+
+**New: today's timeline.** Under the notch heatmap, one line says when the Mac was first opened today and when Claude first opened, with a midnight-to-midnight strip of when the Mac was on. Hover it for the full list (screen on/off, sleep/wake, shutdown, boot, login, app opens). GNotch logs these moments to `timeline.jsonl` from now on, and reads the earlier ones from the system: wtmp (boot, shutdown, console login), `pmset -g log` (screen, sleep, wake) and running apps' launch times. No Full Disk Access needed. Other apps: `defaults write com.christianqp4.GNotch timelineApps -array …`.
+
 ## Ubuntu 0.6.3 · 2026-10-17
 
 **Fixed: the `.deb` instructions.** On Ubuntu 22.04, double-clicking a `.deb` opens it in the Archive Manager (which just shows `control.tar`, `data.tar` and `debian-binary`) instead of installing it. Install it with:

@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let ambient = AmbientPlayer()
     private let shots = ScreenshotLibrary()
     private let router = DashboardRouter()
+    private let timeline = TimelineStore()
     private var phaseWatch: AnyCancellable?
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
@@ -20,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, shots: shots, ambient: ambient,
+        notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, shots: shots, ambient: ambient, timeline: timeline,
                                 openLog: { [weak self] in self?.showDashboard() },
                                 addPast: { [weak self] in self?.showDashboard(addBlock: true) })
         // Ubuntu-style: a new screenshot is on the clipboard right away, and in the history.

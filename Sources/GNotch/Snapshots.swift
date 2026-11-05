@@ -39,6 +39,14 @@ enum Snapshots {
         }
         let shots = ScreenshotLibrary(folder: shotsDir, watch: false)
 
+        let day = Calendar.current.startOfDay(for: Date())
+        let at = { (h: Double) in day.addingTimeInterval(h * 3600) }
+        let timeline = TimelineStore(sample: [
+            DayEvent(date: at(1.04), kind: .displayOff), DayEvent(date: at(2.24), kind: .displayOn),
+            DayEvent(date: at(4.36), kind: .shutdown), DayEvent(date: at(14.29), kind: .boot),
+            DayEvent(date: at(14.31), kind: .login), DayEvent(date: at(14.31), kind: .launch, app: "Claude"),
+        ])
+
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
                        large: Bool = false, dragging: DropZone? = nil, setup: (TimerEngine) -> Void) {
@@ -60,7 +68,7 @@ enum Snapshots {
                                startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color.white.opacity(0.25)).frame(height: notch.height)
                 NotchRootView(engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state,
-                              ambient: ambient, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
+                              ambient: ambient, timeline: timeline, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
             }
             render(view, size: CGSize(width: 900, height: notch.height + 600), dark: true,
                    to: dir.appendingPathComponent("notch-\(name).png"))

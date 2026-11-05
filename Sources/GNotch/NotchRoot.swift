@@ -10,6 +10,7 @@ struct NotchRootView: View {
     @ObservedObject var shots: ScreenshotLibrary
     @ObservedObject var state: NotchState
     @ObservedObject var ambient: AmbientPlayer
+    @ObservedObject var timeline: TimelineStore
     let openLog: () -> Void
     let addPast: () -> Void
     let collapse: () -> Void
@@ -101,7 +102,7 @@ struct NotchRootView: View {
     private var timerPage: some View {
         switch (engine.phase, state.large) {
         case (.idle, false):
-            IdleView(engine: engine, store: store, ambient: ambient, openLog: openLog, addPast: addPast)
+            IdleView(engine: engine, store: store, ambient: ambient, timeline: timeline, openLog: openLog, addPast: addPast)
         case (.idle, true):
             LargeIdleView(engine: engine, store: store, ambient: ambient, openLog: openLog, addPast: addPast)
         case (.running, false), (.paused, false):

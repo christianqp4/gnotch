@@ -44,9 +44,11 @@ struct IdleView: View {
     @ObservedObject var engine: TimerEngine
     @ObservedObject var store: SessionStore
     @ObservedObject var ambient: AmbientPlayer
+    @ObservedObject var timeline: TimelineStore
     let openLog: () -> Void
     let addPast: () -> Void
     @State private var hoveredDay: Date? = SnapshotHints.hover?.day
+    @State private var hoveringTimeline = false
 
     private let presets: [Int?] = [25, 50, 90, 120, nil]
 
@@ -98,7 +100,11 @@ struct IdleView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                if let day = hoveredDay {
+                if hoveringTimeline {
+                    TimelineBrief(events: timeline.events)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                } else if let day = hoveredDay {
                     DayBrief(day: day, blocks: store.blocks(on: day))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -126,6 +132,8 @@ struct IdleView: View {
                 .foregroundStyle(.secondary)
                 }
             }
+
+            TodayLine(timeline: timeline, hovering: $hoveringTimeline)
         }
     }
 }
