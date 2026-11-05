@@ -37,7 +37,7 @@ enum Snapshots {
             try? img.pngData()?.write(to: url)
             setxattr(url.path, "com.apple.metadata:kMDItemIsScreenCapture", "1", 1, 0, 0)
         }
-        let shots = ScreenshotLibrary(folder: shotsDir, watch: false)
+        var shots = ScreenshotLibrary(folder: shotsDir, watch: false)
 
         let day = Calendar.current.startOfDay(for: Date())
         let at = { (h: Double) in day.addingTimeInterval(h * 3600) }
@@ -47,9 +47,10 @@ enum Snapshots {
             DayEvent(date: at(14.31), kind: .login), DayEvent(date: at(14.31), kind: .launch, app: "Claude"),
         ])
 
+        SnapshotHints.keepAwake = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.caffeinate, power: KeepAwakeSamples.ac)
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
-                       large: Bool = false, dragging: DropZone? = nil, setup: (TimerEngine) -> Void) {
+                       large: Bool = false, dragging: DropZone? = nil, textExport: (String, String)? = nil, setup: (TimerEngine) -> Void) {
             let engine = TimerEngine(store: store, persistsState: false)
             let state = NotchState()
             state.notchSize = notch
@@ -61,6 +62,10 @@ enum Snapshots {
             if let dragging {
                 state.dragging = true
                 state.dropZone = dragging
+            }
+            if let textExport {
+                state.textExportOpen = true
+                (state.textExport.title, state.textExport.text) = textExport
             }
             setup(engine)
             let view = ZStack(alignment: .top) {
@@ -117,8 +122,34 @@ enum Snapshots {
         }
         UserDefaults.standard.set("Screenshots", forKey: "clipboardFilter")
         notchShot("14-screenshots", hovering: true, page: .clipboard) { _ in }
+        // A folder macOS won't let us read, like the Desktop after "Don't Allow".
+        let lockedDir = tmp.appendingPathComponent("locked")
+        try? FileManager.default.createDirectory(at: lockedDir, withIntermediateDirectories: true)
+        chmod(lockedDir.path, 0)
+        let lockedShots = ScreenshotLibrary(folder: lockedDir, watch: false)
+        print("screenshot folder blocked detected: \(lockedShots.blocked)")
+        let savedShots = shots
+        shots = lockedShots
+        notchShot("14b-screenshots-blocked", hovering: true, page: .clipboard) { _ in }
+        shots = savedShots
+        chmod(lockedDir.path, 0o755)
         UserDefaults.standard.removeObject(forKey: "clipboardFilter")
         notchShot("11-drop", hovering: true, dragging: .vision) { _ in }
+        SnapshotHints.keepAwakeCard = true
+        notchShot("22-keep-awake-on-card", hovering: true, page: .clipboard) { _ in }
+        SnapshotHints.keepAwake = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.accidental, power: KeepAwakeSamples.battery)
+        notchShot("23-keep-awake-off-card", hovering: true, page: .clipboard) { _ in }
+        SnapshotHints.keepAwakeCard = false
+        notchShot("24-keep-awake-off-timer", hovering: true) { _ in }
+        SnapshotHints.keepAwake = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.caffeinate, power: KeepAwakeSamples.ac)
+        notchShot("25-keep-awake-on-running", hovering: true) { e in
+            e.task = "Thesis chapter 3"; e.start(minutes: 50); e.simulate(elapsed: 18 * 60 + 25)
+        }
+        notchShot("20-text-export-empty", hovering: true, page: .clipboard, textExport: ("", "")) { _ in }
+        notchShot("21-text-export", hovering: true, page: .clipboard, textExport: (
+            "jueves, noviembre 5",
+            String(repeating: "Hoy me levanté tarde, pero el café de la mañana sabía a mandarina y pensé en España. ", count: 40)
+        )) { _ in }
 
         // Heatmap styles and the hover card. The user's own style setting is put back afterwards.
         let savedStyle = UserDefaults.standard.string(forKey: "heatStyle")
@@ -157,6 +188,122 @@ enum Snapshots {
         try? FileManager.default.removeItem(at: file)
         try? FileManager.default.removeItem(at: tmp)
         print("Snapshots written to \(dir.path)")
+    }
+
+    /// Dev check of the keep-awake status: `GNOTCH_KEEPAWAKE_CHECK=1 GNotch`. Only reads `pmset`.
+    static func keepAwakeCheck() -> Bool {
+        var ok = true
+        func check(_ name: String, _ pass: Bool) {
+            print("\(pass ? "PASS" : "FAIL")  \(name)")
+            if !pass { ok = false }
+        }
+        let now = Date()
+        let on = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.caffeinate, power: KeepAwakeSamples.ac, now: now)
+        check("caffeinate -is -t counts as on", on.state == .on)
+        check("its time left comes from the timeout", on.ends == now.addingTimeInterval(43057) && on.timeLeft(now) == "11h 58m")
+        check("AC power and battery are read", on.onAC == true && on.battery == "46% charging")
+        check("accidental holders are listed, not counted",
+              on.others == ["Handoff", "the display being on", "WhatsApp"])
+
+        let off = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.accidental, power: KeepAwakeSamples.battery)
+        check("WhatsApp, Handoff and powerd alone are off", off.state == .off && off.ends == nil)
+        check("battery is read", off.onAC == false && off.battery == "42% discharging")
+
+        let claude = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.claude, power: KeepAwakeSamples.ac)
+        check("Claude alone is 'while working', not on", claude.state == .claudeOnly)
+
+        let noLimit = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.noLimit, power: KeepAwakeSamples.ac)
+        check("caffeinate without -t is on, no time limit", noLimit.state == .on && noLimit.ends == nil)
+
+        let sOnly = KeepAwakeSamples.noLimit.replacingOccurrences(of: "PreventUserIdleSystemSleep", with: "PreventSystemSleep")
+        let sAC = KeepAwakeStatus.parse(assertions: sOnly, power: KeepAwakeSamples.ac)
+        let sBattery = KeepAwakeStatus.parse(assertions: sOnly, power: KeepAwakeSamples.battery)
+        check("caffeinate -s alone is on with AC", sAC.state == .on)
+        check("caffeinate -s alone is off on battery", sBattery.state == .off && sBattery.caffeinateIgnoredOnBattery)
+
+        let display = KeepAwakeSamples.noLimit.replacingOccurrences(of: "PreventUserIdleSystemSleep", with: "PreventUserIdleDisplaySleep")
+        check("caffeinate -d alone doesn't count",
+              KeepAwakeStatus.parse(assertions: display, power: KeepAwakeSamples.ac).state == .off)
+        check("unreadable output is unknown, not off",
+              KeepAwakeStatus.parse(assertions: "garbage", power: "").state == .unknown)
+
+        let live = KeepAwakeMonitor.readNow()
+        print("      live: \(live.state), left \(live.timeLeft() ?? "-"), AC \(live.onAC.map(String.init) ?? "?"), battery \(live.battery ?? "?"), others \(live.others)")
+        return ok
+    }
+
+    /// Dev check of "Text to .md": `GNOTCH_EXPORT_CHECK=text.txt GNOTCH_EXPORT_FOLDER=/tmp/x GNOTCH_EXPORT_TITLE=… GNotch`.
+    /// Writes only into that folder. The pasteboard writes carry the transient marker, so a running
+    /// GNotch keeps them out of the history. The file stays on the pasteboard at the end.
+    static func exportCheck(textFile: URL, folder: URL, title: String) -> Bool {
+        _ = NSApplication.shared
+        let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+        let pb = NSPasteboard.general
+        var ok = true
+        func check(_ name: String, _ pass: Bool) {
+            print("\(pass ? "PASS" : "FAIL")  \(name)")
+            if !pass { ok = false }
+        }
+        guard let bytes = try? Data(contentsOf: textFile), let text = String(data: bytes, encoding: .utf8) else {
+            print("FAIL  can't read \(textFile.path)")
+            return false
+        }
+
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        pb.setString("", forType: transient)
+        let tv = PlainTextEditor.makeTextView()
+        let start = Date()
+        tv.paste(nil)
+        print(String(format: "      pasted %d bytes in %.0f ms", bytes.count, Date().timeIntervalSince(start) * 1000))
+        check("the text area keeps the paste unchanged", Data(tv.string.utf8) == bytes)
+
+        let expected = Data("# \(title)\n\n".utf8) + bytes
+        do {
+            let first = try TextExport.write(title: title, text: tv.string, folder: folder)
+            print("      \(first.path)")
+            check("file name comes from the title", first.lastPathComponent == "\(TextExport.fileBase(for: title)).md")
+            check("file is heading + exact text", (try? Data(contentsOf: first)) == expected)
+
+            let second = try TextExport.write(title: title, text: "otra entrada", folder: folder)
+            print("      \(second.lastPathComponent)")
+            check("same title doesn't overwrite", second != first && second.lastPathComponent.contains(" (2)"))
+            check("the first file is intact", (try? Data(contentsOf: first)) == expected)
+
+            TextExport.putOnPasteboard(first, pb)
+            pb.addTypes([transient], owner: nil)
+            pb.setString("", forType: transient)
+            print("      pasteboard: \((pb.types ?? []).map(\.rawValue).joined(separator: ", "))")
+            let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
+            check("pasteboard holds the file URL", urls?.first?.standardizedFileURL == first.standardizedFileURL)
+        } catch {
+            check("write: \(error.localizedDescription)", false)
+        }
+
+        // History: the file replaces the text entry that copying the same text left behind.
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("gnotch-export-check-\(UUID())")
+        let clips = ClipboardStore(dir: tmp, monitor: false)
+        clips.add(.text(text), source: "Test")
+        clips.add(.text("otra cosa"), source: "Test")
+        clips.togglePin(clips.items[0].id)
+        let exported = folder.appendingPathComponent("\(TextExport.fileBase(for: title)).md")
+        clips.addExportedFile(exported, sourceText: text)
+        pb.addTypes([transient], owner: nil)
+        pb.setString("", forType: transient)
+        check("history: file on top, no duplicate of the text, pinned item kept",
+              clips.items.first?.kind == .file && clips.items.first?.paths == [exported.path]
+                  && !clips.items.contains { $0.text == text } && clips.items.contains { $0.pinned })
+        print("      history stores \(clips.items.count) items, file source: \(clips.items.first?.sourceApp ?? "-")")
+        try? FileManager.default.removeItem(at: tmp)
+
+        for (title, name) in [("a/b: c", "a-b- c"), ("  .oculto  ", "oculto"), ("nota.md", "nota"),
+                              ("dos\nlíneas", "dos líneas"), ("mañana, señor Ñandú", "mañana, señor Ñandú")] {
+            check("name \"\(title)\" → \"\(name)\"", TextExport.fileBase(for: title) == name)
+        }
+        check("very long title fits a file name", TextExport.fileBase(for: String(repeating: "ñ", count: 400)).utf8.count <= 240)
+        check("empty title uses today's date", TextExport.fileBase(for: "") == TextExport.todayTitle())
+        print("      today: \(TextExport.todayTitle())")
+        return ok
     }
 
     private static func render<V: View>(_ view: V, size: CGSize, dark: Bool, to url: URL) {
@@ -261,4 +408,50 @@ private struct SplitMix {
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return Double((z ^ (z >> 31)) >> 11) / Double(1 << 53)
     }
+}
+
+/// Real `pmset` output, for snapshots and the keep-awake check.
+enum KeepAwakeSamples {
+    static let ac = """
+    Now drawing from 'AC Power'
+     -InternalBattery-0 (id=22151267)\t46%; charging; 1:13 remaining present: true
+    """
+    static let battery = """
+    Now drawing from 'Battery Power'
+     -InternalBattery-0 (id=22151267)\t42%; discharging; 4:02 remaining present: true
+    """
+    private static let accidentalLines = """
+       pid 648(sharingd): [0x00005e8e00018c67] 00:04:58 PreventUserIdleSystemSleep named: "Handoff"
+       pid 338(powerd): [0x000038a900018600] 02:46:39 PreventUserIdleSystemSleep named: "Powerd - Prevent sleep while display is on"
+       pid 338(powerd): [0x00005ee900098c82] 00:03:27 UserIsActive named: "com.apple.powermanagement.lidopen"
+    \tTimeout will fire in 992 secs Action=TimeoutActionRelease
+       pid 628(WhatsApp): [0x0000003900018161] 06:47:27 PreventUserIdleSystemSleep named: "cameracaptured-idleSleepPreventionForBWFigCaptureDevice"
+    """
+    private static let head = """
+    2026-11-05 17:46:54 +0100
+    Assertion status system-wide:
+       PreventSystemSleep             1
+       PreventUserIdleSystemSleep     1
+    Listed by owning process:
+    """
+    static let accidental = head + "\n" + accidentalLines
+    static let claude = accidental + """
+
+       pid 622(Claude): [0x00005f0e00018d04] 00:02:50 NoIdleSleepAssertion named: "Electron"
+    """
+    static let caffeinate = claude + """
+
+       pid 12359(caffeinate): [0x00005f2900018d4b] 00:02:23 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+    \tDetails: caffeinate asserting for 43200 secs
+    \tLocalized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+    \tTimeout will fire in 43057 secs Action=TimeoutActionRelease
+       pid 12359(caffeinate): [0x00005f2900078d4c] 00:02:23 PreventSystemSleep named: "caffeinate command-line tool"
+    \tDetails: caffeinate asserting for 43200 secs
+    \tTimeout will fire in 43057 secs Action=TimeoutActionRelease
+    """
+    static let noLimit = head + """
+
+       pid 77(caffeinate): [0x00005f2900018d4b] 00:02:23 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+    \tLocalized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+    """
 }

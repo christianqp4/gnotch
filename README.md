@@ -3,7 +3,7 @@
 The Gears notch app for macOS. One notch, three pages that swap in place:
 
 - **Deep Work**: a timer for deep work blocks with a log of every block, intensity ratings, notes on how it felt, and a GitHub-style heatmap of the year
-- **Clipboard**: history of everything you copy (text, images, files), with pins and search, plus **Ubuntu-style screenshots** (every screenshot is instantly on your clipboard)
+- **Clipboard**: history of everything you copy (text, images, files), with pins and search, plus **Ubuntu-style screenshots** (every screenshot is instantly on your clipboard) and **Text to .md** (title + long pasted text → a Markdown file, ready to paste)
 - **Vision Board**: images and quotes as home-screen-style widgets
 
 **On Ubuntu?** There's a GNOME Shell extension with the same three pages (timer with drift tracker and heatmap, clipboard, vision board) in the top bar, sharing the same data formats: [linux/gnome-extension](linux/gnome-extension/README.md).
@@ -65,10 +65,22 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 | **⌃⌥D** | Timer |
 | **⌃⌥V** | Clipboard (search is focused: type, **↩** copies the top match) |
 | **⌃⌥B** | Vision Board |
+| **⌃⌥M** | Text to .md (the title is focused) |
 | **⌃⌥P** | I drifted: pause the block and breathe (again to resume) |
 | ⤢ button | Bigger layout for any page |
 
 The small icons left of the notch switch pages; while a block runs, the timer icon shows the countdown.
+
+## Keep-awake status
+
+The cup after the page icons says whether this Mac will stay awake, on every page: **On** in green (with the time left if there's room), **Off** in grey, **Claude** in orange. Hover or click it for the details: time left and when it ends, AC or battery, and what it takes to drive chats from the phone (lid open, Claude app open, Wi-Fi, charger).
+
+<img src="docs/notch-keep-awake.png" width="560" alt="Keep-awake status and its card">
+
+- **On** means a real `caffeinate` is holding the Mac (`caffeinate -is -t 43200`, say). `-s` alone doesn't count on battery, where macOS ignores it, and `-d` alone doesn't count because it only keeps the display on.
+- **Claude** means only the Claude app is holding it, which lasts only while a chat is working.
+- **Off** can still have other apps holding the Mac for now (a camera in WhatsApp, Handoff, the display being on). The card lists them, but they can let go at any time, so they don't count.
+- It only reads `pmset -g assertions` and `pmset -g batt`, when the notch opens and every 30 s while it's open. It changes nothing and can't tell whether the lid is closed.
 
 ## Clipboard
 
@@ -82,6 +94,22 @@ The small icons left of the notch switch pages; while a block runs, the timer ic
 - **Drag anything onto the notch** → drop on *Clipboard*.
 - **Password managers are skipped**: anything marked concealed or transient ([nspasteboard.org](http://nspasteboard.org) convention, used by 1Password, Bitwarden, KeePassXC…), and anything copied while a password manager is in front.
 - Pause or clear the history from the menu bar icon. History is stored only on this Mac, unencrypted, in `~/Library/Application Support/GNotch/Clipboard/`.
+
+### Text to .md
+
+<img src="docs/notch-text-export.png" width="560" alt="Text to .md form">
+
+Turn a long text (a journaling transcription, say) into a file you can paste into a chat, faster than opening an editor: **⌃⌥M**, type the title, **↩**, **⌘V**, **⌘↩**. The **.md** button beside the clipboard search opens the same form.
+
+- The file is named after the title (`jueves, noviembre 5.md`; accents and spaces stay, `/` and `:` become `-`). An empty title uses today's date in that format.
+- The content is `# title`, a blank line, then the text byte for byte. Smart quotes, autocorrect and the like are off in the text area.
+- It never overwrites: a second file with the same title becomes `jueves, noviembre 5 (2).md`.
+- The file itself goes on the clipboard (as a file URL, like Finder's Copy), not its text and not its path as text, so ⌘V attaches the file. It also shows in the history as a file tile: click to copy it again, drag it out, or right-click → Show in Finder.
+- The text entry left in the history by copying that same text is removed (unless pinned), so the journal isn't stored twice. Copying the text and editing it first leaves that entry alone.
+- Files go to `~/Documents/Journaling` by default, outside any repo. The folder is shown in the form: click it to open it in Finder, or **Change…** to pick another (it's remembered). macOS may ask once for access to Documents.
+- A half-finished draft survives closing the notch or switching page, but not quitting GNotch. It's only in memory; nothing is written until you export.
+
+Mac only for now: the Ubuntu extension doesn't have this.
 
 ### Screenshots, the Ubuntu way
 
@@ -155,6 +183,8 @@ Sources/GNotch/
   NotchRoot.swift        page switching, top band tabs, drop targets
   ClipboardStore.swift   pasteboard watcher, history storage, drop parsing
   ClipboardPage.swift    clipboard UI
+  TextExport.swift       Text to .md: file naming and writing, draft, form, plain text area
+  KeepAwake.swift        keep-awake status: pmset parsing, monitor, cup badge, card
   VisionBoard.swift      vision board storage + UI
   HotKeys.swift          global shortcuts (Carbon, no permissions needed)
   NotchViews.swift       collapsed / idle / running / finish UI
@@ -172,6 +202,14 @@ Render every UI state to PNGs without touching your real data (useful for checki
 ```bash
 swift build -c release && GNOTCH_SNAPSHOT=/tmp/gnotch-shots .build/release/GNotch
 ```
+
+Check Text to .md the same way, writing only into the folder you name (the pasteboard writes are marked transient, so a running GNotch doesn't record them; the test file stays on your clipboard afterwards):
+
+```bash
+GNOTCH_EXPORT_CHECK=sample.txt GNOTCH_EXPORT_FOLDER=/tmp/gnotch-export GNOTCH_EXPORT_TITLE="jueves, noviembre 5" .build/release/GNotch
+```
+
+Check the keep-awake parser against real `pmset` samples and print the live state (read-only): `GNOTCH_KEEPAWAKE_CHECK=1 .build/release/GNotch`.
 
 Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns`
 

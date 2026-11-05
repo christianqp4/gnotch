@@ -34,8 +34,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // ⌃⌥D timer · ⌃⌥V clipboard · ⌃⌥B vision board
         HotKeys.register(keyCode: kVK_ANSI_D, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .timer) }
-        HotKeys.register(keyCode: kVK_ANSI_V, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .clipboard) }
+        HotKeys.register(keyCode: kVK_ANSI_V, modifiers: HotKeys.controlOption) { [weak self] in
+            self?.notch.state.textExportOpen = false
+            self?.notch.toggle(page: .clipboard)
+        }
         HotKeys.register(keyCode: kVK_ANSI_B, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggle(page: .vision) }
+        // ⌃⌥M: text to .md (title + pasted text → a file on the clipboard).
+        HotKeys.register(keyCode: kVK_ANSI_M, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggleTextExport() }
         // ⌃⌥P: "I drifted". Pauses and opens the breathing guide; again to get back to focus.
         HotKeys.register(keyCode: kVK_ANSI_P, modifiers: HotKeys.controlOption) { [weak self] in self?.toggleDrift() }
 
@@ -80,12 +85,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.keyEquivalentModifierMask = [.control, .option]
             menu.addItem(item)
         }
+        let textExport = ClosureMenuItem("Text to .md…", key: "m") { [weak self] in self?.notch.toggleTextExport() }
+        textExport.keyEquivalentModifierMask = [.control, .option]
+        menu.addItem(textExport)
         menu.addItem(ClosureMenuItem("Log & Heatmap", key: "l") { [weak self] in self?.showDashboard() })
         menu.addItem(.separator())
 
         let sounds = ClosureMenuItem("Timer Sounds") { Sounds.enabled.toggle() }
         sounds.state = Sounds.enabled ? .on : .off
         menu.addItem(sounds)
+        if shots.blocked {
+            let blocked = ClosureMenuItem("⚠︎ No access to the screenshot folder: allow it…") { ScreenshotLibrary.openPrivacySettings() }
+            blocked.toolTip = "System Settings → Privacy & Security → Files & Folders → GNotch → Desktop Folder"
+            menu.addItem(blocked)
+        }
         let autoCopy = ClosureMenuItem("Screenshots → Clipboard") { [shots] in shots.autoCopy.toggle() }
         autoCopy.state = shots.autoCopy ? .on : .off
         autoCopy.toolTip = "Like Ubuntu: every new screenshot is copied, ready for ⌘V"

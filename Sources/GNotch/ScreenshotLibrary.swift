@@ -15,6 +15,8 @@ final class ScreenshotLibrary: ObservableObject {
 
     @Published private(set) var shots: [Shot] = []
     @Published private(set) var folder: URL
+    /// The folder exists but macOS won't let GNotch read it (Files & Folders permission denied).
+    @Published private(set) var blocked = false
     @Published var autoCopy = UserDefaults.standard.object(forKey: "screenshotAutoCopy") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoCopy, forKey: "screenshotAutoCopy") }
     }
@@ -46,6 +48,10 @@ final class ScreenshotLibrary: ObservableObject {
                     self.known.removeAll()
                     self.rescan(initial: true)
                     self.startWatching()
+                } else if self.blocked {
+                    // Access may have been allowed in System Settings since: pick up from there.
+                    self.rescan(initial: true)
+                    if !self.blocked { self.startWatching() }
                 }
             }
         }
@@ -73,6 +79,13 @@ final class ScreenshotLibrary: ObservableObject {
     }
 
     func refresh() { rescan(initial: false) }
+
+    /// System Settings → Privacy & Security → Files & Folders, where the Desktop permission lives.
+    static func openPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 
     /// Puts a screenshot on the clipboard as an image, ready for ⌘V.
     static func copyToPasteboard(_ url: URL) -> Bool {
@@ -106,8 +119,16 @@ final class ScreenshotLibrary: ObservableObject {
 
     private func rescan(initial: Bool) {
         let fm = FileManager.default
-        let urls = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.creationDateKey],
-                                                options: [.skipsHiddenFiles])) ?? []
+        let urls: [URL]
+        do {
+            urls = try fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.creationDateKey],
+                                              options: [.skipsHiddenFiles])
+            blocked = false
+        } catch {
+            // It's there but can't be listed: permission, not an empty folder.
+            blocked = fm.fileExists(atPath: folder.path)
+            urls = []
+        }
         var found: [Shot] = []
         for url in urls where Self.isScreenshot(url) {
             let date = (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast

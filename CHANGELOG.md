@@ -4,6 +4,12 @@ GNotch ships as two apps sharing one data format: the macOS app (tags `vX.Y.Z`) 
 
 ## Unreleased (macOS)
 
+**Fixed: screenshots stopped silently when macOS denied access to their folder.** If the folder can't be opened (for example after "Don't Allow" on the Desktop prompt), the Screenshots tab and the menu bar now say so, with a button to System Settings → Files & Folders, and GNotch retries every 5 s, so screenshots resume as soon as access is allowed.
+
+**New: keep-awake status.** A cup in the notch's top band, on every page, says whether the Mac will stay awake: On when a real `caffeinate` holds it (with the time left), Claude when only the Claude app does, Off otherwise. Other holders like WhatsApp's camera, Handoff or the display being on are listed but don't count. Hover or click for time left, AC or battery, and the conditions for driving chats from the phone. Read-only: it reads `pmset` when the notch opens and every 30 s while it's open.
+
+**New: Text to .md.** Type a title, paste a long text, press ⌘↩: you get a Markdown file saved in `~/Documents/Journaling` (changeable) and on the clipboard as a file, ready to paste. ⌃⌥M or the **.md** button on the clipboard page. The file is `# title` plus the text byte for byte; the name comes from the title, accents included; an existing name gets ` (2)` instead of being overwritten. The file shows in the history as a file tile and replaces the text entry left by copying the same text.
+
 **New: today's timeline.** Under the notch heatmap, one line says when the Mac was first opened today and when Claude first opened, with a midnight-to-midnight strip of when the Mac was on. Hover it for the full list (screen on/off, sleep/wake, shutdown, boot, login, app opens). GNotch logs these moments to `timeline.jsonl` from now on, and reads the earlier ones from the system: wtmp (boot, shutdown, console login), `pmset -g log` (screen, sleep, wake) and running apps' launch times. No Full Disk Access needed. Other apps: `defaults write com.christianqp4.GNotch timelineApps -array …`.
 
 ## Ubuntu 0.6.3 · 2026-10-17

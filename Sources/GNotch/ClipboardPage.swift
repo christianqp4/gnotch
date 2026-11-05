@@ -20,6 +20,7 @@ struct ClipboardPage: View {
     @ObservedObject var vision: VisionStore
     @ObservedObject var shots: ScreenshotLibrary
     @ObservedObject var state: NotchState
+    let collapse: () -> Void
     @AppStorage("clipboardFilter") private var filterRaw = Filter.all.rawValue
     @State private var query = ""
     @State private var showAll = false
@@ -34,6 +35,14 @@ struct ClipboardPage: View {
     private var rowHeight: CGFloat { state.large ? 88 : 72 }
 
     var body: some View {
+        if state.textExportOpen {
+            TextExportForm(draft: state.textExport, clips: clips, state: state, collapse: collapse)
+        } else {
+            history
+        }
+    }
+
+    private var history: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
@@ -58,6 +67,18 @@ struct ClipboardPage: View {
                         .foregroundStyle(.orange)
                         .help("Clipboard history is paused (menu bar → Pause Clipboard History)")
                 }
+
+                Button { state.textExportOpen = true } label: {
+                    Label(".md", systemImage: state.textExport.isEmpty ? "doc.text" : "doc.text.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.08)))
+                        .foregroundStyle(state.textExport.isEmpty ? Color.secondary : Heat.base)
+                        .contentShape(RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .help("Text to .md: title + pasted text → a file on the clipboard (⌃⌥M)")
             }
 
             HStack(spacing: 4) {
@@ -205,7 +226,24 @@ struct ClipboardPage: View {
     private func screenshotsGrid(width: CGFloat) -> some View {
         let all = filteredShots
         let list = Array(all.prefix(shotLimit))
-        if list.isEmpty {
+        if shots.blocked {
+            VStack(spacing: 8) {
+                Image(systemName: "lock.fill").font(.system(size: 24)).foregroundStyle(.orange)
+                Text("GNotch can't open \(shots.folder.lastPathComponent), where your screenshots are saved.")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("New screenshots won't reach the clipboard. Turn on Desktop Folder for GNotch in System Settings → Privacy & Security → Files & Folders. GNotch picks it up within a few seconds.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                Button("Open Files & Folders settings") { ScreenshotLibrary.openPrivacySettings() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Heat.base)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 30)
+            .padding(.top, 40)
+            .frame(maxWidth: .infinity)
+        } else if list.isEmpty {
             emptyState("camera.viewfinder", "No screenshots in \(shots.folder.lastPathComponent) yet.",
                        "Take one with ⇧⌘4: it lands on your clipboard, ready for ⌘V.")
         } else {

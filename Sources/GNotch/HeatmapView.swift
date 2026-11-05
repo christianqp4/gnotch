@@ -28,6 +28,8 @@ enum WeekNumber {
 /// Dev only: lets the snapshot tool render a heatmap with a day already hovered.
 enum SnapshotHints {
     nonisolated(unsafe) static var hover: HeatHover?
+    nonisolated(unsafe) static var keepAwake: KeepAwakeStatus?
+    nonisolated(unsafe) static var keepAwakeCard = false
 }
 
 /// The day under the pointer and where the pointer is, in the "heat" coordinate space.

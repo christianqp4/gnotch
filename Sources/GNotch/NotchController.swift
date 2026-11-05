@@ -46,6 +46,9 @@ final class NotchState: ObservableObject {
     @Published var badge: NotchBadge?
     /// Bumped to ask the visible page to focus its text field.
     @Published var focusToken = 0
+    /// The clipboard page shows the "Text to .md" form instead of the history.
+    @Published var textExportOpen = false
+    let textExport = TextExportDraft()
 
     @Published var page = NotchPage(rawValue: UserDefaults.standard.string(forKey: "notchPage") ?? "") ?? .timer {
         didSet { UserDefaults.standard.set(page.rawValue, forKey: "notchPage") }
@@ -72,6 +75,14 @@ final class NotchState: ObservableObject {
         toast = message
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             if self?.toast == message { self?.toast = nil }
+        }
+    }
+
+    func showBadge(icon: String, text: String, seconds: Double = 2) {
+        let new = NotchBadge(icon: icon, text: text)
+        badge = new
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            if self?.badge == new { self?.badge = nil }
         }
     }
 }
@@ -209,6 +220,12 @@ final class NotchController {
         RunLoop.main.add(t, forMode: .common)
         pollTimer = t
 
+        // The form is for typing: however it opens (⌃⌥M or the .md button), take the keyboard.
+        state.$textExportOpen
+            .filter { $0 }
+            .sink { [weak self] _ in self?.panel.makeKey() }
+            .store(in: &cancellables)
+
         engine.onGoalReached = { [weak self] in self?.peek(seconds: 5) }
         engine.$phase
             .removeDuplicates()
@@ -230,11 +247,7 @@ final class NotchController {
     }
 
     func showBadge(icon: String, text: String, seconds: Double = 2) {
-        let badge = NotchBadge(icon: icon, text: text)
-        state.badge = badge
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
-            if self?.state.badge == badge { self?.state.badge = nil }
-        }
+        state.showBadge(icon: icon, text: text, seconds: seconds)
     }
 
     /// Shortcut behaviour: open pinned on `page`, or close if it's already showing.
@@ -250,6 +263,20 @@ final class NotchController {
         state.focusToken += 1
     }
 
+    /// ⌃⌥M: the "Text to .md" form on the clipboard page, title focused; again to close.
+    func toggleTextExport() {
+        if state.pinned, state.page == .clipboard, state.textExportOpen {
+            collapse()
+            return
+        }
+        state.textExportOpen = true
+        state.page = .clipboard
+        state.pinned = true
+        updateMouseIgnoring()
+        panel.makeKey()
+        state.focusToken += 1
+    }
+
     /// Open pinned on a page (no toggling).
     func open(page: NotchPage) {
         state.page = page
@@ -259,6 +286,8 @@ final class NotchController {
 
     func collapse() {
         guard engine.phase != .finishing else { return }
+        // A draft stays open for later; an empty form goes back to the history.
+        if state.textExport.isEmpty { state.textExportOpen = false }
         state.pinned = false
         state.peek = false
         state.hovering = false

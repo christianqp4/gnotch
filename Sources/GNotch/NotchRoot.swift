@@ -19,6 +19,10 @@ struct NotchRootView: View {
     /// Read here so the notch resizes when the heatmap switches between year and calendar.
     @AppStorage("heatStyle") private var heatStyle = HeatStyle.year.rawValue
 
+    @StateObject private var keepAwake = KeepAwakeMonitor()
+    @State private var keepAwakeHover = false
+    @State private var keepAwakeTapped = SnapshotHints.keepAwakeCard
+
     private let spring = Animation.spring(response: 0.36, dampingFraction: 0.82)
 
     var body: some View {
@@ -36,6 +40,13 @@ struct NotchRootView: View {
                 .clipShape(shape)
             if !expanded, engine.isActive {
                 OutlineProgress(engine: engine)
+            }
+            if expanded, keepAwakeHover || keepAwakeTapped {
+                KeepAwakeCard(status: keepAwake.status)
+                    .padding(.top, state.notchSize.height + 2)
+                    .padding(.leading, NotchLayout.ear + 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
             }
             if let toast = state.toast, expanded {
                 Text(toast)
@@ -58,6 +69,7 @@ struct NotchRootView: View {
         .animation(spring, value: engine.phase)
         .animation(spring, value: state.page)
         .animation(spring, value: state.large)
+        .animation(spring, value: state.textExportOpen)
         .animation(spring, value: heatStyle)
         .animation(spring, value: state.dragging)
         .animation(spring, value: state.badge)
@@ -76,7 +88,7 @@ struct NotchRootView: View {
                     } else {
                         switch state.visiblePage(phase: engine.phase) {
                         case .timer: timerPage
-                        case .clipboard: ClipboardPage(clips: clips, vision: vision, shots: shots, state: state)
+                        case .clipboard: ClipboardPage(clips: clips, vision: vision, shots: shots, state: state, collapse: collapse)
                         case .vision: VisionPage(vision: vision, state: state)
                         }
                     }
@@ -120,9 +132,16 @@ struct NotchRootView: View {
         let page = state.visiblePage(phase: engine.phase)
         return HStack(spacing: 0) {
             HStack(spacing: 3) {
-                ForEach(NotchPage.allCases) { p in tab(p, selected: p == page) }
+                // The tabs keep their full width; the badge shrinks to fit what's left.
+                HStack(spacing: 3) {
+                    ForEach(NotchPage.allCases) { p in tab(p, selected: p == page) }
+                }
+                .fixedSize()
+                KeepAwakeBadge(monitor: keepAwake, hovering: $keepAwakeHover, tapped: $keepAwakeTapped)
+                Spacer(minLength: 0)
             }
-            .frame(width: side)
+            .padding(.leading, 4)
+            .frame(width: side, alignment: .leading)
 
             Color.clear.frame(width: state.notchSize.width)
 

@@ -191,6 +191,20 @@ final class ClipboardStore: ObservableObject {
         add(.image(image), source: "Screenshot")
     }
 
+    /// A "Text to .md" export: the file goes on the clipboard, and into history as a file. It
+    /// replaces the text entry left by copying that same text, so the journal isn't kept twice.
+    func addExportedFile(_ url: URL, sourceText: String) {
+        TextExport.putOnPasteboard(url)
+        lastChangeCount = NSPasteboard.general.changeCount
+        let signature = "t:" + Self.hash(Data(sourceText.utf8))
+        items.removeAll { !$0.pinned && $0.signature == signature }
+        if paused {
+            save()
+        } else {
+            add(.files([url]), source: "Text to .md")
+        }
+    }
+
     // MARK: Actions
 
     func copy(_ item: ClipItem) {
