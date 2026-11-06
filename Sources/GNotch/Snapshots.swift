@@ -48,6 +48,7 @@ enum Snapshots {
         ])
 
         SnapshotHints.keepAwake = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.caffeinate, power: KeepAwakeSamples.ac)
+        SoundMixer.shared.showSample([])
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
                        large: Bool = false, dragging: DropZone? = nil, textExport: (String, String)? = nil, setup: (TimerEngine) -> Void) {
@@ -145,6 +146,16 @@ enum Snapshots {
         notchShot("25-keep-awake-on-running", hovering: true) { e in
             e.task = "Thesis chapter 3"; e.start(minutes: 50); e.simulate(elapsed: 18 * 60 + 25)
         }
+        SoundMixer.shared.showSample([
+            SoundApp(id: "com.anthropic.claudefordesktop", name: "Claude", pid: nil, playing: true, muted: true, clients: [1]),
+            SoundApp(id: "com.apple.Music", name: "Music", pid: nil, playing: true, muted: false, clients: [2]),
+            SoundApp(id: "com.apple.Safari", name: "Safari", pid: nil, playing: true, muted: false, clients: [3]),
+        ])
+        SnapshotHints.soundCard = true
+        notchShot("26-sound-card", hovering: true, page: .clipboard) { _ in }
+        SnapshotHints.soundCard = false
+        notchShot("27-sound-muted-badge", hovering: true) { _ in }
+        SoundMixer.shared.showSample([])
         notchShot("20-text-export-empty", hovering: true, page: .clipboard, textExport: ("", "")) { _ in }
         notchShot("21-text-export", hovering: true, page: .clipboard, textExport: (
             "jueves, noviembre 5",
@@ -229,6 +240,46 @@ enum Snapshots {
 
         let live = KeepAwakeMonitor.readNow()
         print("      live: \(live.state), left \(live.timeLeft() ?? "-"), AC \(live.onAC.map(String.init) ?? "?"), battery \(live.battery ?? "?"), others \(live.others)")
+        return ok
+    }
+
+    /// Dev check of the sound mixer: `GNOTCH_SOUND_CHECK=1 GNotch` lists who uses sound (read-only).
+    /// Add `GNOTCH_SOUND_MUTE=Claude GNOTCH_SOUND_SECONDS=10` to mute that app for that long, then unmute.
+    static func soundCheck(env: [String: String]) -> Bool {
+        _ = NSApplication.shared
+        var ok = true
+        func check(_ name: String, _ pass: Bool) {
+            print("\(pass ? "PASS" : "FAIL")  \(name)")
+            if !pass { ok = false }
+        }
+        check("helper names are cleaned", SoundMixer.cleanName("Safari Graphics and Media") == "Safari"
+              && SoundMixer.cleanName("Brave Browser Helper") == "Brave Browser"
+              && SoundMixer.cleanName("\u{200E}WhatsApp") == "WhatsApp")
+        let clients = SoundMixer.readClients()
+        check("Core Audio lists its clients", !clients.isEmpty)
+        for c in clients.sorted(by: { $0.pid < $1.pid }) {
+            let o = SoundMixer.owner(of: c)
+            print("      \(c.running ? "PLAYING" : "-      ") pid \(c.pid)  \(c.bundleID.isEmpty ? "?" : c.bundleID)  ->  \(o.name) [\(o.id)]")
+        }
+        let mixer = SoundMixer.shared
+        mixer.refresh()
+        print("      playing now: \(mixer.apps.map(\.name))")
+        guard let target = env["GNOTCH_SOUND_MUTE"] else { return ok }
+        guard let app = mixer.apps.first(where: { $0.name.localizedCaseInsensitiveContains(target) }) else {
+            print("FAIL  \(target) isn't playing now")
+            return false
+        }
+        mixer.mute(app)
+        check("muted \(app.name)", mixer.mutedIDs.contains(app.id))
+        if let e = mixer.lastError { print("      \(e)") }
+        let seconds = Int(env["GNOTCH_SOUND_SECONDS"] ?? "") ?? 10
+        for s in 1...seconds {
+            RunLoop.main.run(until: Date().addingTimeInterval(1))
+            mixer.refresh()
+            print("      \(s)s  " + mixer.apps.map { "\($0.name)\($0.muted ? " (muted)" : "")\($0.playing ? " playing" : "")" }.joined(separator: " · "))
+        }
+        mixer.unmuteAll()
+        check("unmuted again", mixer.mutedIDs.isEmpty)
         return ok
     }
 

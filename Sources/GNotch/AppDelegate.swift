@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let router = DashboardRouter()
     private let timeline = TimelineStore()
     private var phaseWatch: AnyCancellable?
+    private var soundWatch: AnyCancellable?
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
     private var dashboard: NSWindow?
@@ -45,18 +46,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKeys.register(keyCode: kVK_ANSI_P, modifiers: HotKeys.controlOption) { [weak self] in self?.toggleDrift() }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "GNotch")
-        image?.isTemplate = true
-        statusItem.button?.image = image
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
+        // While any app is muted, the menu bar icon is a red speaker, so a mute is never forgotten.
+        soundWatch = SoundMixer.shared.$mutedIDs.sink { [weak self] ids in self?.updateStatusIcon(muted: !ids.isEmpty) }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        SoundMixer.shared.unmuteAll()
+    }
+
+    private func updateStatusIcon(muted: Bool) {
+        if muted {
+            let config = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
+            let image = NSImage(systemSymbolName: "speaker.slash.fill", accessibilityDescription: "GNotch: an app is muted")?
+                .withSymbolConfiguration(config)
+            image?.isTemplate = false
+            statusItem.button?.image = image
+        } else {
+            let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "GNotch")
+            image?.isTemplate = true
+            statusItem.button?.image = image
+        }
     }
 
     // MARK: Status menu
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        let mixer = SoundMixer.shared
+        if !mixer.mutedIDs.isEmpty {
+            let header = NSMenuItem(title: "Muted: \(mixer.mutedNames.joined(separator: ", "))", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+            for (id, name) in zip(mixer.mutedIDs, mixer.mutedNames) {
+                menu.addItem(ClosureMenuItem("Unmute \(name)") { mixer.unmute(id) })
+            }
+            if mixer.mutedIDs.count > 1 {
+                menu.addItem(ClosureMenuItem("Unmute All") { mixer.unmuteAll() })
+            }
+            menu.addItem(.separator())
+        }
         switch engine.phase {
         case .idle:
             for m in [25, 50, 90] {

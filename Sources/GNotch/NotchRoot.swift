@@ -22,6 +22,8 @@ struct NotchRootView: View {
     @StateObject private var keepAwake = KeepAwakeMonitor()
     @State private var keepAwakeHover = false
     @State private var keepAwakeTapped = SnapshotHints.keepAwakeCard
+    @ObservedObject private var mixer = SoundMixer.shared
+    @State private var soundOpen = SnapshotHints.soundCard
 
     private let spring = Animation.spring(response: 0.36, dampingFraction: 0.82)
 
@@ -41,7 +43,12 @@ struct NotchRootView: View {
             if !expanded, engine.isActive {
                 OutlineProgress(engine: engine)
             }
-            if expanded, keepAwakeHover || keepAwakeTapped {
+            if expanded, soundOpen {
+                SoundCard(mixer: mixer)
+                    .padding(.top, state.notchSize.height + 2)
+                    .padding(.leading, NotchLayout.ear + 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if expanded, keepAwakeHover || keepAwakeTapped {
                 KeepAwakeCard(status: keepAwake.status)
                     .padding(.top, state.notchSize.height + 2)
                     .padding(.leading, NotchLayout.ear + 10)
@@ -137,6 +144,7 @@ struct NotchRootView: View {
                     ForEach(NotchPage.allCases) { p in tab(p, selected: p == page) }
                 }
                 .fixedSize()
+                SoundBadge(mixer: mixer, open: $soundOpen)
                 KeepAwakeBadge(monitor: keepAwake, hovering: $keepAwakeHover, tapped: $keepAwakeTapped)
                 Spacer(minLength: 0)
             }

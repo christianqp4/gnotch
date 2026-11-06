@@ -22,6 +22,8 @@
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>GNotch mutes one app's sound at a time (the sound mixer). It never records or saves audio.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
