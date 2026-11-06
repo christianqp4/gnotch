@@ -7,3 +7,4 @@ xcuserdata/
 Resources/AppIcon.iconset/
 linux/gnome-extension/dist/
 linux/gnome-extension/build/
+.claude/worktrees/
