@@ -47,10 +47,16 @@ enum Snapshots {
             DayEvent(date: at(14.31), kind: .login), DayEvent(date: at(14.31), kind: .launch, app: "Claude"),
         ])
 
+        let questionsFile = tmp.appendingPathComponent("questions.json")
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        try? Data(QuestionSamples.seed.utf8).write(to: questionsFile)
+        var questions = QuestionStore(fileURL: questionsFile, watch: false)
+
         SnapshotHints.keepAwake = KeepAwakeStatus.parse(assertions: KeepAwakeSamples.caffeinate, power: KeepAwakeSamples.ac)
         let notch = CGSize(width: 185, height: 32)
         func notchShot(_ name: String, hovering: Bool, wings: Bool = true, page: NotchPage = .timer,
-                       large: Bool = false, dragging: DropZone? = nil, textExport: (String, String)? = nil, setup: (TimerEngine) -> Void) {
+                       large: Bool = false, dragging: DropZone? = nil, textExport: (String, String)? = nil,
+                       questionsOpen: Bool = false, setup: (TimerEngine) -> Void) {
             let engine = TimerEngine(store: store, persistsState: false)
             let state = NotchState()
             state.notchSize = notch
@@ -63,6 +69,12 @@ enum Snapshots {
                 state.dragging = true
                 state.dropZone = dragging
             }
+            state.calendarLine = SnapshotHints.calendarLine
+            state.quiet = SnapshotHints.quiet
+            if questionsOpen {
+                state.questionsOpen = true
+                state.pinned = true
+            }
             if let textExport {
                 state.textExportOpen = true
                 (state.textExport.title, state.textExport.text) = textExport
@@ -73,7 +85,7 @@ enum Snapshots {
                                startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color.white.opacity(0.25)).frame(height: notch.height)
                 NotchRootView(engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state,
-                              ambient: ambient, timeline: timeline, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
+                               ambient: ambient, timeline: timeline, questions: questions, openLog: {}, addPast: {}, collapse: {}, onDrop: { _, _ in })
             }
             render(view, size: CGSize(width: 900, height: notch.height + 600), dark: true,
                    to: dir.appendingPathComponent("notch-\(name).png"))
@@ -145,6 +157,54 @@ enum Snapshots {
         notchShot("25-keep-awake-on-running", hovering: true) { e in
             e.task = "Thesis chapter 3"; e.start(minutes: 50); e.simulate(elapsed: 18 * 60 + 25)
         }
+        // The question queue: the badge, a yes/no card, a choice with a comment, all answered, none.
+        notchShot("30-questions-badge", hovering: true) { _ in }
+        notchShot("31-questions-yesno", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = { m in
+            m.pick(value: "yes"); m.comment = "El martes, con Isabel"; m.commit()
+            m.pick(index: 1)
+        }
+        notchShot("32-questions-choice", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = { m in
+            m.skip(); m.skip()
+            m.pick(index: 1); m.comment = "Falta la mesa de la cocina"
+        }
+        notchShot("33-questions-choice3", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = { m in
+            for _ in 0..<10 { guard let q = m.current else { break }; m.pick(index: 0); if q.kind == .text { m.textAnswer = "ok" }; m.commit() }
+        }
+        notchShot("34-questions-done", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = nil
+        // Long plain-Spanish questions (10 Nov style): the notch grows, nothing is cut.
+        try? Data(QuestionSamples.long.utf8).write(to: questionsFile)
+        questions = QuestionStore(fileURL: questionsFile, watch: false)
+        notchShot("36-questions-long", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = { m in m.skip() }
+        notchShot("37-questions-long-choice", hovering: true, questionsOpen: true) { _ in }
+        SnapshotHints.questions = nil
+        try? Data(QuestionSamples.seed.utf8).write(to: questionsFile)
+        questions = QuestionStore(fileURL: questionsFile, watch: false)
+        notchShot("35-questions-running", hovering: true, page: .clipboard) { e in
+            e.start(minutes: 50); e.simulate(elapsed: 12 * 60)
+        }
+        try? FileManager.default.removeItem(at: questionsFile)
+        questions = QuestionStore(fileURL: questionsFile, watch: false)
+        notchShot("36-questions-none", hovering: true, questionsOpen: true) { _ in }
+        try? Data(QuestionSamples.seed.utf8).write(to: questionsFile)
+        questions = QuestionStore(fileURL: questionsFile, watch: false)
+        SnapshotHints.calendarLine = "16:30 Entrevista con David (Origen) · en 45 min"
+        notchShot("37-calendar-line", hovering: true) { _ in }
+        notchShot("38-calendar-line-clipboard", hovering: true, page: .clipboard) { _ in }
+        SnapshotHints.calendarLine = nil
+        SnapshotHints.quiet = true
+        notchShot("39-quiet", hovering: true) { _ in }
+        SnapshotHints.quiet = false
+        let reminderDefaults = UserDefaults.standard.data(forKey: ReminderSettings.key)
+        render(RemindersView(reminders: Reminders(questions: questions, state: NotchState()) {})
+                .background(Color(nsColor: .windowBackgroundColor)),
+               size: CGSize(width: 900, height: 780), dark: true, to: dir.appendingPathComponent("reminders.png"))
+        if let reminderDefaults { UserDefaults.standard.set(reminderDefaults, forKey: ReminderSettings.key) }
+
         notchShot("20-text-export-empty", hovering: true, page: .clipboard, textExport: ("", "")) { _ in }
         notchShot("21-text-export", hovering: true, page: .clipboard, textExport: (
             "jueves, noviembre 5",
@@ -202,6 +262,7 @@ enum Snapshots {
         check("caffeinate -is -t counts as on", on.state == .on)
         check("its time left comes from the timeout", on.ends == now.addingTimeInterval(43057) && on.timeLeft(now) == "11h 58m")
         check("AC power and battery are read", on.onAC == true && on.battery == "46% charging")
+        check("the caffeinate pid is kept for Turn off", on.caffeinatePIDs == [12359])
         check("accidental holders are listed, not counted",
               on.others == ["Handoff", "the display being on", "WhatsApp"])
 
@@ -220,6 +281,8 @@ enum Snapshots {
         let sBattery = KeepAwakeStatus.parse(assertions: sOnly, power: KeepAwakeSamples.battery)
         check("caffeinate -s alone is on with AC", sAC.state == .on)
         check("caffeinate -s alone is off on battery", sBattery.state == .off && sBattery.caffeinateIgnoredOnBattery)
+        check("Turn off still sees a -s caffeinate on battery", sBattery.caffeinatePIDs == [77])
+        check("only caffeinate processes are stopped", KeepAwakeControl.name(of: Int(getpid())) != "caffeinate")
 
         let display = KeepAwakeSamples.noLimit.replacingOccurrences(of: "PreventUserIdleSystemSleep", with: "PreventUserIdleDisplaySleep")
         check("caffeinate -d alone doesn't count",
@@ -229,6 +292,26 @@ enum Snapshots {
 
         let live = KeepAwakeMonitor.readNow()
         print("      live: \(live.state), left \(live.timeLeft() ?? "-"), AC \(live.onAC.map(String.init) ?? "?"), battery \(live.battery ?? "?"), others \(live.others)")
+
+        // GNOTCH_KEEPAWAKE_LIVE=1: really turn it on for an hour, then off. Leaves it as it found it
+        // only if no caffeinate was running before.
+        if ProcessInfo.processInfo.environment["GNOTCH_KEEPAWAKE_LIVE"] != nil, live.caffeinatePIDs.isEmpty {
+            func wait(_ s: Double) { RunLoop.main.run(until: Date().addingTimeInterval(s)) }
+            MainActor.assumeIsolated { _ = KeepAwakeControl.start(hours: 1, replacing: []) }
+            wait(1)
+            let started = KeepAwakeMonitor.readNow()
+            check("Start 1 h: on, about an hour left", started.state == .on && (3500...3601).contains(started.ends?.timeIntervalSinceNow ?? 0))
+            print("      after start: \(started.state), left \(started.timeLeft() ?? "-"), pids \(started.caffeinatePIDs)")
+            MainActor.assumeIsolated { _ = KeepAwakeControl.start(hours: 4, replacing: started.caffeinatePIDs) }
+            wait(1)
+            let changed = KeepAwakeMonitor.readNow()
+            check("Change to 4 h replaces it", changed.caffeinatePIDs.count == 1 && changed.caffeinatePIDs != started.caffeinatePIDs
+                  && (14300...14401).contains(changed.ends?.timeIntervalSinceNow ?? 0))
+            MainActor.assumeIsolated { KeepAwakeControl.stop(changed.caffeinatePIDs) }
+            wait(1)
+            let stopped = KeepAwakeMonitor.readNow()
+            check("Turn off: no caffeinate left", stopped.caffeinatePIDs.isEmpty && stopped.state != .on)
+        }
         return ok
     }
 

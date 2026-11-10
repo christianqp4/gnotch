@@ -22,6 +22,10 @@
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>GNotch shows your next event in the notch and can remind you a few minutes before. It only reads.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>GNotch shows your next event in the notch and can remind you a few minutes before. It only reads.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

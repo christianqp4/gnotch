@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Will this Mac stay awake? Read-only: read from `pmset`, nothing is ever changed.
+/// Will this Mac stay awake? Read from `pmset`; `KeepAwakeControl` turns it on and off.
 struct KeepAwakeStatus: Equatable {
     enum State: Equatable {
         /// A real `caffeinate` is holding the Mac awake.
@@ -28,6 +28,8 @@ struct KeepAwakeStatus: Equatable {
     var others: [String] = []
     /// `caffeinate -s` alone is ignored on battery.
     var caffeinateIgnoredOnBattery = false
+    /// Every `caffeinate` holding an assertion, counted or not: what "Turn off" stops.
+    var caffeinatePIDs: [Int] = []
     /// Nil if unknown.
     var onAC: Bool?
     var battery: String?
@@ -53,6 +55,7 @@ struct KeepAwakeStatus: Equatable {
         let claude = holders.filter { $0.process.hasPrefix("Claude") }
 
         status.caffeinateIgnoredOnBattery = !caffeinate.isEmpty && working.isEmpty
+        status.caffeinatePIDs = Array(Set(caffeinate.map(\.pid))).sorted()
         var seen = Set<String>()
         status.others = holders
             .filter { $0.process != "caffeinate" && !$0.process.hasPrefix("Claude") }
@@ -88,11 +91,78 @@ struct KeepAwakeStatus: Equatable {
     }
 }
 
+/// Turns keep-awake on and off with a real `caffeinate`, the same thing the chats run by hand.
+enum KeepAwakeControl {
+    static let changed = Notification.Name("GNotchKeepAwakeChanged")
+    static let choices: [(short: String, long: String, hours: Int?)] = [
+        ("1 h", "For 1 hour", 1), ("2 h", "For 2 hours", 2), ("4 h", "For 4 hours", 4),
+        ("12 h", "For 12 hours", 12), ("No limit", "Until I turn it off", nil),
+    ]
+    /// Kept so Foundation reaps them when they end.
+    @MainActor private static var running: [Process] = []
+
+    /// Starts `caffeinate -is` (no idle sleep; no system sleep while on AC), after stopping the ones
+    /// in `replacing`. It isn't tied to GNotch: it keeps going if GNotch quits or is reinstalled.
+    @MainActor @discardableResult
+    static func start(hours: Int?, replacing pids: [Int]) -> Bool {
+        stop(pids, notify: false)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
+        p.arguments = ["-is"] + (hours.map { ["-t", String($0 * 3600)] } ?? [])
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        p.terminationHandler = { ended in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { running.removeAll { $0 === ended } }
+                NotificationCenter.default.post(name: changed, object: nil)
+            }
+        }
+        guard (try? p.run()) != nil else { return false }
+        running.append(p)
+        notifySoon()
+        return true
+    }
+
+    /// Stops these `caffeinate` processes, whoever started them. Anything else is left alone.
+    @MainActor
+    static func stop(_ pids: [Int], notify: Bool = true) {
+        for pid in pids where name(of: pid) == "caffeinate" { kill(pid_t(pid), SIGTERM) }
+        if notify { notifySoon() }
+    }
+
+    /// pmset shows the change a moment later.
+    private static func notifySoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NotificationCenter.default.post(name: changed, object: nil)
+        }
+    }
+
+    static func name(of pid: Int) -> String? {
+        var buf = [CChar](repeating: 0, count: 256)
+        guard proc_name(pid_t(pid), &buf, UInt32(buf.count)) > 0 else { return nil }
+        return String(cString: buf)
+    }
+}
+
 /// Reads the status only while the notch is open, every 30 s. Collapsed, it costs nothing.
 @MainActor
 final class KeepAwakeMonitor: ObservableObject {
     @Published private(set) var status = SnapshotHints.keepAwake ?? .unknown
     private var timer: Timer?
+    private var observer: NSObjectProtocol?
+
+    init() {
+        observer = NotificationCenter.default.addObserver(forName: KeepAwakeControl.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, SnapshotHints.keepAwake == nil else { return }
+                self.refresh()
+            }
+        }
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
 
     func start() {
         guard SnapshotHints.keepAwake == nil, timer == nil else { return }
@@ -204,9 +274,12 @@ struct KeepAwakeBadge: View {
     }
 }
 
-/// What the cup means, on hover or tap.
+/// What the cup means, on hover or tap. Tapped, it also turns keep-awake on and off.
 struct KeepAwakeCard: View {
     let status: KeepAwakeStatus
+    var interactive = false
+    var onStart: (Int?) -> Void = { _ in }
+    var onStop: () -> Void = {}
 
     private var headline: String {
         switch status.state {
@@ -250,6 +323,12 @@ struct KeepAwakeCard: View {
                     .foregroundStyle(.secondary)
             }
             Divider()
+            if interactive {
+                controls
+                Divider()
+            } else {
+                Text("Click the cup to turn it on or off.").foregroundStyle(.secondary)
+            }
             Text("To drive chats from the phone: lid open (a closed lid still sleeps), Claude app open, Wi-Fi connected, charger in.")
                 .foregroundStyle(.secondary)
         }
@@ -261,5 +340,32 @@ struct KeepAwakeCard: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color(white: 0.13)))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.15)))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+    }
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(status.state == .on ? "Change it to:" : "Keep the Mac awake:").foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                ForEach(KeepAwakeControl.choices, id: \.short) { c in
+                    pill(c.short, fill: Heat.base.opacity(0.22), text: Heat.base) { onStart(c.hours) }
+                }
+            }
+            if !status.caffeinatePIDs.isEmpty {
+                pill("Turn off", fill: Color.white.opacity(0.12), text: .white) { onStop() }
+            }
+        }
+    }
+
+    private func pill(_ title: String, fill: Color, text: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(text)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(fill))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

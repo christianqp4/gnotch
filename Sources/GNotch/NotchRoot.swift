@@ -11,6 +11,7 @@ struct NotchRootView: View {
     @ObservedObject var state: NotchState
     @ObservedObject var ambient: AmbientPlayer
     @ObservedObject var timeline: TimelineStore
+    let questions: QuestionStore
     let openLog: () -> Void
     let addPast: () -> Void
     let collapse: () -> Void
@@ -42,11 +43,15 @@ struct NotchRootView: View {
                 OutlineProgress(engine: engine)
             }
             if expanded, keepAwakeHover || keepAwakeTapped {
-                KeepAwakeCard(status: keepAwake.status)
+                KeepAwakeCard(status: keepAwake.status, interactive: keepAwakeTapped,
+                              onStart: { [keepAwake] hours in
+                                  KeepAwakeControl.start(hours: hours, replacing: keepAwake.status.caffeinatePIDs)
+                              },
+                              onStop: { [keepAwake] in KeepAwakeControl.stop(keepAwake.status.caffeinatePIDs) })
                     .padding(.top, state.notchSize.height + 2)
-                    .padding(.leading, NotchLayout.ear + 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .allowsHitTesting(false)
+                    .padding(.trailing, NotchLayout.ear + 10)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .allowsHitTesting(keepAwakeTapped)
             }
             if let toast = state.toast, expanded {
                 Text(toast)
@@ -70,6 +75,8 @@ struct NotchRootView: View {
         .animation(spring, value: state.page)
         .animation(spring, value: state.large)
         .animation(spring, value: state.textExportOpen)
+        .animation(spring, value: state.questionsOpen)
+        .animation(spring, value: state.showsCalendarLine)
         .animation(spring, value: heatStyle)
         .animation(spring, value: state.dragging)
         .animation(spring, value: state.badge)
@@ -82,9 +89,14 @@ struct NotchRootView: View {
         if expanded {
             VStack(spacing: 0) {
                 topBand(width: size.width)
+                if state.showsCalendarLine, let line = state.calendarLine {
+                    CalendarLineView(text: line)
+                }
                 Group {
                     if state.dragging {
                         DropZonesView(state: state)
+                    } else if state.questionsOpen, engine.phase != .finishing {
+                        QuestionQueueView(store: questions, state: state, preset: SnapshotHints.questions)
                     } else {
                         switch state.visiblePage(phase: engine.phase) {
                         case .timer: timerPage
@@ -98,9 +110,12 @@ struct NotchRootView: View {
                 .padding(.bottom, 14)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .transition(.opacity)
-                .id(state.dragging ? "drop" : state.visiblePage(phase: engine.phase).rawValue)
+                .id(state.dragging ? "drop"
+                    : state.questionsOpen && engine.phase != .finishing ? "questions"
+                    : state.visiblePage(phase: engine.phase).rawValue)
             }
             .transition(.opacity.animation(.easeOut(duration: 0.18)))
+            .onAppear { state.onExpand?() }
         } else if let badge = state.badge {
             BadgeWings(badge: badge, notch: state.notchSize)
                 .transition(.opacity)
@@ -137,7 +152,7 @@ struct NotchRootView: View {
                     ForEach(NotchPage.allCases) { p in tab(p, selected: p == page) }
                 }
                 .fixedSize()
-                KeepAwakeBadge(monitor: keepAwake, hovering: $keepAwakeHover, tapped: $keepAwakeTapped)
+                QuestionBadge(store: questions, state: state)
                 Spacer(minLength: 0)
             }
             .padding(.leading, 4)
@@ -147,6 +162,8 @@ struct NotchRootView: View {
 
             HStack(spacing: 4) {
                 Spacer(minLength: 0)
+                // Right side, so the tabs and the question bubble never squeeze it.
+                KeepAwakeBadge(monitor: keepAwake, hovering: $keepAwakeHover, tapped: $keepAwakeTapped)
                 switch page {
                 case .timer:
                     let today = store.total(onDay: Date())
@@ -176,6 +193,7 @@ struct NotchRootView: View {
     private func tab(_ p: NotchPage, selected: Bool) -> some View {
         Button {
             state.page = p
+            state.questionsOpen = false
         } label: {
             Group {
                 if p == .timer, engine.isActive {
@@ -189,8 +207,8 @@ struct NotchRootView: View {
             }
             .padding(.horizontal, 7)
             .frame(minWidth: 26, minHeight: 22)
-            .background(Capsule().fill(Color.white.opacity(selected ? 0.16 : 0)))
-            .foregroundStyle(selected ? Color.white : Color.secondary)
+            .background(Capsule().fill(Color.white.opacity(selected && !state.questionsOpen ? 0.16 : 0)))
+            .foregroundStyle(selected && !state.questionsOpen ? Color.white : Color.secondary)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

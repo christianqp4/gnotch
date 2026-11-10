@@ -30,6 +30,9 @@ enum SnapshotHints {
     nonisolated(unsafe) static var hover: HeatHover?
     nonisolated(unsafe) static var keepAwake: KeepAwakeStatus?
     nonisolated(unsafe) static var keepAwakeCard = false
+    nonisolated(unsafe) static var questions: ((QuestionQueueModel) -> Void)?
+    nonisolated(unsafe) static var calendarLine: String?
+    nonisolated(unsafe) static var quiet = false
 }
 
 /// The day under the pointer and where the pointer is, in the "heat" coordinate space.

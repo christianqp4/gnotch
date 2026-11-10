@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let shots = ScreenshotLibrary()
     private let router = DashboardRouter()
     private let timeline = TimelineStore()
+    private let questions = QuestionStore()
+    private var reminders: Reminders?
+    private var remindersWindow: NSWindow?
     private var phaseWatch: AnyCancellable?
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
@@ -22,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
         notch = NotchController(engine: engine, store: store, clips: clips, vision: vision, shots: shots, ambient: ambient, timeline: timeline,
+                                questions: questions,
                                 openLog: { [weak self] in self?.showDashboard() },
                                 addPast: { [weak self] in self?.showDashboard(addBlock: true) })
         // Ubuntu-style: a new screenshot is on the clipboard right away, and in the history.
@@ -43,6 +47,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKeys.register(keyCode: kVK_ANSI_M, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggleTextExport() }
         // ⌃⌥P: "I drifted". Pauses and opens the breathing guide; again to get back to focus.
         HotKeys.register(keyCode: kVK_ANSI_P, modifiers: HotKeys.controlOption) { [weak self] in self?.toggleDrift() }
+        // ⌃⌥Q: the chats' questions, one card at a time.
+        HotKeys.register(keyCode: kVK_ANSI_Q, modifiers: HotKeys.controlOption) { [weak self] in self?.notch.toggleQuestions() }
+        // Calendar and notification setup talk to system services: kept off the launch path.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            self.reminders = Reminders(questions: self.questions, state: self.notch.state) { [weak self] in
+                guard let self, !(self.notch.state.pinned && self.notch.state.questionsOpen) else { return }
+                self.notch.toggleQuestions()
+            }
+        }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "GNotch")
@@ -89,6 +103,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         textExport.keyEquivalentModifierMask = [.control, .option]
         menu.addItem(textExport)
         menu.addItem(ClosureMenuItem("Log & Heatmap", key: "l") { [weak self] in self?.showDashboard() })
+        questions.reload()
+        let open = questions.openCount
+        let ask = ClosureMenuItem(open == 0 ? "Questions…" : "Questions (\(open))…", key: "q") { [weak self] in
+            guard let self, !(self.notch.state.pinned && self.notch.state.questionsOpen) else { return }
+            self.notch.toggleQuestions()
+        }
+        ask.keyEquivalentModifierMask = [.control, .option]
+        ask.toolTip = "Yes/no questions from the chats, from ~/gears_OS/dashboard/questions.json"
+        menu.addItem(ask)
+        var remindTitle = "Recordatorios…"
+        if let (r, at) = reminders?.next() { remindTitle += "  (\(r.kind.label) \(RemindersView.hm(at)))" }
+        let remind = ClosureMenuItem(remindTitle) { [weak self] in self?.showReminders() }
+        remind.toolTip = "A few silent reminders a night, the calendar in the notch, and quiet after the last one"
+        menu.addItem(remind)
+        menu.addItem(keepAwakeItem())
         menu.addItem(.separator())
 
         let sounds = ClosureMenuItem("Timer Sounds") { Sounds.enabled.toggle() }
@@ -182,6 +211,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if addBlock { router.addRequest += 1 }
     }
 
+    // MARK: Reminders
+
+    private func showReminders() {
+        guard let reminders else { return }
+        if remindersWindow == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 780),
+                             styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+            w.title = "GNotch · Recordatorios"
+            w.isReleasedWhenClosed = false
+            w.contentView = NSHostingView(rootView: RemindersView(reminders: reminders))
+            w.center()
+            remindersWindow = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        remindersWindow?.makeKeyAndOrderFront(nil)
+    }
+
     // MARK: Main menu (needed so ⌘C / ⌘V / ⌘W work in text fields)
 
     private func setupMainMenu() {
@@ -212,6 +258,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         main.addItem(windowItem)
 
         NSApp.mainMenu = main
+    }
+}
+
+extension AppDelegate {
+    /// "Keep Awake" with its state, and a submenu to turn a real `caffeinate` on or off.
+    func keepAwakeItem() -> NSMenuItem {
+        let status = KeepAwakeMonitor.readNow()
+        var title = "Keep Awake"
+        switch status.state {
+        case .on: title += status.timeLeft().map { ": On, \($0) left" } ?? ": On, no limit"
+        case .claudeOnly: title += ": only while a chat works"
+        case .off: title += ": Off"
+        case .unknown: break
+        }
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        for c in KeepAwakeControl.choices {
+            sub.addItem(ClosureMenuItem(c.long) { KeepAwakeControl.start(hours: c.hours, replacing: status.caffeinatePIDs) })
+        }
+        sub.addItem(.separator())
+        let off = ClosureMenuItem("Turn Off") { KeepAwakeControl.stop(status.caffeinatePIDs) }
+        off.isEnabled = !status.caffeinatePIDs.isEmpty
+        sub.addItem(off)
+        item.submenu = sub
+        item.toolTip = "Runs caffeinate -is: no idle sleep, and no system sleep on AC. A closed lid still sleeps."
+        return item
     }
 }
 

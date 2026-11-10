@@ -67,20 +67,67 @@ The Gears notch app for macOS. One notch, three pages that swap in place:
 | **⌃⌥B** | Vision Board |
 | **⌃⌥M** | Text to .md (the title is focused) |
 | **⌃⌥P** | I drifted: pause the block and breathe (again to resume) |
+| **⌃⌥Q** | Questions from the chats, one card at a time |
 | ⤢ button | Bigger layout for any page |
 
 The small icons left of the notch switch pages; while a block runs, the timer icon shows the countdown.
 
+## Questions from the chats
+
+<img src="docs/notch-questions.png" width="560" alt="A question card: three answers, a comment, Next">
+
+The Gears chats ask yes/no questions to close or update tasks ("¿ya firmaste el contrato?"). Instead of answering them in a chat, answer them in the notch: a blue bubble with a count shows in the top band while questions are open. Click it (or **⌃⌥Q**) and they come one card at a time.
+
+- **Y / N** (or **1–9** for the options) picks, **↩** saves and shows the next one. **C** writes a comment first, just in case. **→** leaves a card for later, **←** goes back to change the last answer.
+- When none are left it says so; the bubble disappears.
+- **Reminder:** *Cerrar el día* (see Reminders below) sends one silent notification when questions are open, and none when there aren't. Click it to open the queue.
+- The bubble hides during the night's quiet stretch; ⌃⌥Q still opens the queue.
+
+The questions live in `~/gears_OS/dashboard/questions.json` (its `about` field explains the format). Chats append questions; GNotch only shows them and writes `answer`, `comment` and `answeredAt` back. It knows nothing about tasks: the day chat or *log the day* reads the answers and updates `tasks.json`.
+
+- Answers go into the file as it is on disk at that moment (read again, changed, written to a temporary file and swapped in), so a question a chat appended a second earlier is kept, and so are fields GNotch doesn't know. If the file can't be read (a chat halfway through writing it), nothing is written and the card says so.
+- GNotch looks at the file's date every 15 s and reads it only when it changed.
+- Yes/no answers are stored as `"yes"` / `"no"`; choices as the option's label; text questions as the text.
+
+Mac only for now: the Ubuntu extension doesn't have this. Dev check (temporary copy, never the real file): `GNOTCH_QUESTIONS_CHECK=1 .build/release/GNotch`.
+
+## Reminders (Recordatorios)
+
+<img src="docs/reminders.png" width="620" alt="Recordatorios window: three reminders per weekday night, quiet time, calendar">
+
+A few quiet reminders a night, and nothing else in GNotch notifies. Menu bar → **Recordatorios…** (it also shows the next one). Every reminder is a silent macOS notification; macOS asks once to allow them (**Probar un aviso** sends one now).
+
+- **Per weekday night**, each on/off with its time and text. Times before 12:00 count as the same night, after midnight. Defaults:
+  - Mon–Thu: *Cerrar el día* 21:30 · *Desconexión* 23:30 (sleep kit and tidy up) · *Último aviso* 00:00 (switch everything off)
+  - Fri–Sun (shift nights, home ~23:30): *Cerrar el día* 23:30 · *Desconexión* 00:15 · *Último aviso* 00:45 (everything ready for sleep, only waiting up)
+- *Cerrar el día* only fires when the question queue has open questions, and clicking it opens the queue.
+- **Quiet stretch:** after the night's last reminder, until 07:00 (*Silencio hasta*), GNotch shows nothing on its own: no question bubble, no calendar line or alerts, no peek when a block reaches its goal. Things you do yourself still work.
+- If the Mac was asleep at a reminder's time, it comes on wake, up to 90 minutes late, never later.
+
+### Calendar
+
+<img src="docs/notch-calendar-line.png" width="560" alt="The next event as a line under the top band">
+
+- The event on now, or the next one within 2 hours, shows as one line under the notch's top band, on every page.
+- An optional alert before each event (default 10 min; 5, 10, 15, 30 or none): a silent notification plus the time beside the closed notch for a few seconds. All-day, cancelled and declined events are skipped.
+- It reads macOS Calendar through EventKit (read-only). Access is asked once, the first time the notch opens. A Google calendar shows up once the account is added in **System Settings → Internet Accounts → Google** with Calendars on; the window says whether it found one. There's no Google login inside GNotch.
+- It reads the next 36 hours when something changes (the calendar, waking up, a reminder's time), never on a polling loop.
+- GNotch is ad-hoc signed, so macOS may ask for Calendar access again after a rebuild.
+
 ## Keep-awake status
 
-The cup after the page icons says whether this Mac will stay awake, on every page: **On** in green (with the time left if there's room), **Off** in grey, **Claude** in orange. Hover or click it for the details: time left and when it ends, AC or battery, and what it takes to drive chats from the phone (lid open, Claude app open, Wi-Fi, charger).
+The cup on the right of the top band (next to **Today** on the timer page) says whether this Mac will stay awake, on every page: **On** in green (with the time left if there's room), **Off** in grey, **Claude** in orange. Hover or click it for the details (click it to turn it on or off, see below): time left and when it ends, AC or battery, and what it takes to drive chats from the phone (lid open, Claude app open, Wi-Fi, charger).
 
 <img src="docs/notch-keep-awake.png" width="560" alt="Keep-awake status and its card">
 
 - **On** means a real `caffeinate` is holding the Mac (`caffeinate -is -t 43200`, say). `-s` alone doesn't count on battery, where macOS ignores it, and `-d` alone doesn't count because it only keeps the display on.
 - **Claude** means only the Claude app is holding it, which lasts only while a chat is working.
 - **Off** can still have other apps holding the Mac for now (a camera in WhatsApp, Handoff, the display being on). The card lists them, but they can let go at any time, so they don't count.
-- It only reads `pmset -g assertions` and `pmset -g batt`, when the notch opens and every 30 s while it's open. It changes nothing and can't tell whether the lid is closed.
+- **Turn it on from GNotch**: click the cup, then **1 h · 2 h · 4 h · 12 h · No limit**. That runs `caffeinate -is` (with `-t` for the hours): no idle sleep, and no system sleep while on AC. Pick another length to replace it, or **Turn off**. The same choices are in the menu bar under **Keep Awake**.
+- **Turn off** stops every `caffeinate` holding the Mac, including one a chat started by hand. Nothing else is touched (it checks the process name before stopping it).
+- The `caffeinate` isn't tied to GNotch: it keeps running if GNotch quits or is reinstalled, and ends on its own when the time runs out.
+- A closed lid still sleeps; `caffeinate` can't stop that.
+- It reads `pmset -g assertions` and `pmset -g batt` when the notch opens, every 30 s while it's open, and right after you change it. It can't tell whether the lid is closed.
 
 ## Clipboard
 
@@ -184,7 +231,7 @@ Sources/GNotch/
   ClipboardStore.swift   pasteboard watcher, history storage, drop parsing
   ClipboardPage.swift    clipboard UI
   TextExport.swift       Text to .md: file naming and writing, draft, form, plain text area
-  KeepAwake.swift        keep-awake status: pmset parsing, monitor, cup badge, card
+  KeepAwake.swift        keep-awake: pmset parsing, monitor, turning caffeinate on/off, cup badge, card
   VisionBoard.swift      vision board storage + UI
   HotKeys.swift          global shortcuts (Carbon, no permissions needed)
   NotchViews.swift       collapsed / idle / running / finish UI
@@ -209,7 +256,7 @@ Check Text to .md the same way, writing only into the folder you name (the paste
 GNOTCH_EXPORT_CHECK=sample.txt GNOTCH_EXPORT_FOLDER=/tmp/gnotch-export GNOTCH_EXPORT_TITLE="jueves, noviembre 5" .build/release/GNotch
 ```
 
-Check the keep-awake parser against real `pmset` samples and print the live state (read-only): `GNOTCH_KEEPAWAKE_CHECK=1 .build/release/GNotch`.
+Check the keep-awake parser against real `pmset` samples and print the live state (read-only): `GNOTCH_KEEPAWAKE_CHECK=1 .build/release/GNotch`. Add `GNOTCH_KEEPAWAKE_LIVE=1` to also turn it on for 1 h, change it to 4 h and turn it off for real (skipped if a `caffeinate` is already running).
 
 Regenerate the app icon: `swift scripts/make-icon.swift && iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns`
 

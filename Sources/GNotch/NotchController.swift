@@ -48,6 +48,20 @@ final class NotchState: ObservableObject {
     @Published var focusToken = 0
     /// The clipboard page shows the "Text to .md" form instead of the history.
     @Published var textExportOpen = false
+    /// The question queue shows in place of the page (badge in the top band, or ⌃⌥Q).
+    @Published var questionsOpen = false
+    /// Height of the open question's text, so the queue grows with long questions instead of cutting them.
+    @Published var questionTextHeight: CGFloat = 0
+    /// Height of its answer buttons (0 for a text question), for long option labels.
+    @Published var questionButtonsHeight: CGFloat = 0
+    /// After the night's last reminder: no question count, no calendar line, no goal peek, until morning.
+    @Published var quiet = false
+    /// The calendar event on now or coming within 2 hours, as one line under the top band.
+    @Published var calendarLine: String?
+    /// Called when the notch opens (the calendar asks for access once, then).
+    var onExpand: (() -> Void)?
+
+    var showsCalendarLine: Bool { calendarLine != nil && !quiet && !dragging }
     let textExport = TextExportDraft()
 
     @Published var page = NotchPage(rawValue: UserDefaults.standard.string(forKey: "notchPage") ?? "") ?? .timer {
@@ -98,6 +112,13 @@ enum NotchLayout {
 
     @MainActor
     static func size(phase: TimerEngine.Phase, expanded: Bool, state: NotchState) -> CGSize {
+        var s = baseSize(phase: phase, expanded: expanded, state: state)
+        if expanded, state.showsCalendarLine { s.height += 20 }
+        return s
+    }
+
+    @MainActor
+    private static func baseSize(phase: TimerEngine.Phase, expanded: Bool, state: NotchState) -> CGSize {
         let notch = state.notchSize
         guard expanded else {
             if state.badge != nil {
@@ -109,27 +130,32 @@ enum NotchLayout {
             return CGSize(width: notch.width + 2 * ear + 2 * wing, height: notch.height)
         }
         if state.dragging {
-            return CGSize(width: 560, height: notch.height + 150)
+            return CGSize(width: 600, height: notch.height + 150)
+        }
+        if state.questionsOpen, phase != .finishing {
+            // 44 pt of text and 46 pt of buttons fit the base height; longer ones add their extra (capped to the canvas).
+            let extra = max(0, state.questionTextHeight - 44) + max(0, state.questionButtonsHeight - 46)
+            return CGSize(width: 580, height: notch.height + 206 + min(340, extra))
         }
         switch state.visiblePage(phase: phase) {
         case .timer:
             switch phase {
-            case .finishing: return CGSize(width: 480, height: notch.height + 392)
+            case .finishing: return CGSize(width: 560, height: notch.height + 392)
             case .idle:
                 // Month calendars are taller than the year grid.
                 let calendar = UserDefaults.standard.string(forKey: "heatStyle") == HeatStyle.calendar.rawValue
                 return state.large ? CGSize(width: 760, height: notch.height + (calendar ? 548 : 456))
-                                   : CGSize(width: 480, height: notch.height + (calendar ? 232 : 228))
+                                   : CGSize(width: 580, height: notch.height + (calendar ? 232 : 228))
             case .running, .paused:
                 return state.large ? CGSize(width: 760, height: notch.height + 238)
-                                   : CGSize(width: 480, height: notch.height + 126)
+                                   : CGSize(width: 580, height: notch.height + 126)
             }
         case .clipboard:
             return state.large ? CGSize(width: 760, height: notch.height + 520)
-                               : CGSize(width: 560, height: notch.height + 400)
+                               : CGSize(width: 600, height: notch.height + 400)
         case .vision:
             return state.large ? CGSize(width: 860, height: notch.height + 560)
-                               : CGSize(width: 540, height: notch.height + 350)
+                               : CGSize(width: 580, height: notch.height + 350)
         }
     }
 }
@@ -160,7 +186,7 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
 
     init(engine: TimerEngine, store: SessionStore, clips: ClipboardStore, vision: VisionStore,
-         shots: ScreenshotLibrary, ambient: AmbientPlayer, timeline: TimelineStore,
+         shots: ScreenshotLibrary, ambient: AmbientPlayer, timeline: TimelineStore, questions: QuestionStore,
          openLog: @escaping () -> Void, addPast: @escaping () -> Void) {
         self.engine = engine
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
@@ -179,7 +205,7 @@ final class NotchController {
         let state = self.state
         let root = NotchRootView(
             engine: engine, store: store, clips: clips, vision: vision, shots: shots, state: state, ambient: ambient,
-            timeline: timeline,
+            timeline: timeline, questions: questions,
             openLog: openLog, addPast: addPast,
             collapse: { [weak self] in self?.collapse() },
             onDrop: { zone, providers in
@@ -225,8 +251,16 @@ final class NotchController {
             .filter { $0 }
             .sink { [weak self] _ in self?.panel.makeKey() }
             .store(in: &cancellables)
+        // The queue answers to Y / N / ↩, so it takes the keyboard too.
+        state.$questionsOpen
+            .filter { $0 }
+            .sink { [weak self] _ in self?.panel.makeKey() }
+            .store(in: &cancellables)
 
-        engine.onGoalReached = { [weak self] in self?.peek(seconds: 5) }
+        engine.onGoalReached = { [weak self] in
+            guard let self, !self.state.quiet else { return }
+            self.peek(seconds: 5)
+        }
         engine.$phase
             .removeDuplicates()
             .scan((TimerEngine.Phase.idle, TimerEngine.Phase.idle)) { ($0.1, $1) }
@@ -277,6 +311,18 @@ final class NotchController {
         state.focusToken += 1
     }
 
+    /// ⌃⌥Q, the badge's menu item and the daily reminder: the question queue; again to close.
+    func toggleQuestions() {
+        if state.pinned, state.questionsOpen {
+            collapse()
+            return
+        }
+        state.questionsOpen = true
+        state.pinned = true
+        updateMouseIgnoring()
+        panel.makeKey()
+    }
+
     /// Open pinned on a page (no toggling).
     func open(page: NotchPage) {
         state.page = page
@@ -288,6 +334,7 @@ final class NotchController {
         guard engine.phase != .finishing else { return }
         // A draft stays open for later; an empty form goes back to the history.
         if state.textExport.isEmpty { state.textExportOpen = false }
+        state.questionsOpen = false
         state.pinned = false
         state.peek = false
         state.hovering = false

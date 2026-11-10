@@ -13,6 +13,7 @@ MainActor.assumeIsolated {
         exit(passed ? 0 : 1)
     }
     if env["GNOTCH_KEEPAWAKE_CHECK"] != nil { exit(Snapshots.keepAwakeCheck() ? 0 : 1) }
+    if env["GNOTCH_QUESTIONS_CHECK"] != nil { exit(QuestionSamples.check() ? 0 : 1) }
     Migration.run()
     let app = NSApplication.shared
     let delegate = AppDelegate()
