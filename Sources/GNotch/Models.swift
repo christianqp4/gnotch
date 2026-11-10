@@ -67,6 +67,8 @@ struct DayStat {
     /// Sum of intensity × minutes, used for a duration-weighted average.
     var intensityMinutes: Double = 0
     var count = 0
+    /// Auto time (chats, commits) not covered by a manual block. Counts in Hours only.
+    var autoMinutes: Double = 0
 
     var avgIntensity: Double { minutes > 0 ? intensityMinutes / minutes : 0 }
 }
@@ -81,23 +83,34 @@ enum HeatMetric: String, CaseIterable, Identifiable {
     var explanation: String {
         switch self {
         case .score: return "Minutes weighted by intensity: 1h at Flow (5) counts 60, 1h at Light (2) counts 24."
-        case .hours: return "Total deep work time per day."
+        case .hours: return "Time per day: timed blocks plus auto time from chats and commits, counted once."
         case .intensity: return "Average intensity per day, weighted by block length."
         }
     }
 
     /// Bucket a day into 0 (nothing) ... 4 (max).
     func level(_ s: DayStat?) -> Int {
-        guard let s, s.count > 0 else { return 0 }
+        guard let s else { return 0 }
+        if self == .hours {
+            let m = s.minutes + s.autoMinutes
+            guard m > 0 else { return 0 }
+            return m < 45 ? 1 : m < 120 ? 2 : m < 240 ? 3 : 4
+        }
+        guard s.count > 0 else { return 0 }
         switch self {
         case .hours:
-            return s.minutes < 45 ? 1 : s.minutes < 120 ? 2 : s.minutes < 240 ? 3 : 4
+            return 0
         case .score:
             return s.weighted < 30 ? 1 : s.weighted < 90 ? 2 : s.weighted < 180 ? 3 : 4
         case .intensity:
             return max(1, min(4, Int(s.avgIntensity.rounded()) - 1))
         }
     }
+}
+
+/// Auto blocks (chats, commits): a calm blue, apart from the intensity oranges.
+enum AutoStyle {
+    static let color = Color(red: 0.42, green: 0.66, blue: 0.98)
 }
 
 enum Heat {

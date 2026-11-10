@@ -4,6 +4,9 @@ import Foundation
 @MainActor
 final class SessionStore: ObservableObject {
     @Published private(set) var sessions: [DeepWorkSession] = []
+    /// Auto blocks from chats and commits (`activity.json`). Shown and counted next to the manual
+    /// blocks in Hours, never saved into `sessions.json`.
+    @Published private(set) var autoBlocks: [ActivityBlock] = []
     let fileURL: URL
 
     private struct FileFormat: Codable {
@@ -61,6 +64,43 @@ final class SessionStore: ObservableObject {
         persist()
     }
 
+    func setAuto(_ blocks: [ActivityBlock]) {
+        let shown = blocks.filter { $0.duration >= 60 }
+        if shown != autoBlocks { autoBlocks = shown }
+    }
+
+    // MARK: Auto time
+
+    /// Auto blocks that started on `day`, earliest first.
+    func autoBlocks(on day: Date) -> [ActivityBlock] {
+        let cal = Calendar.current
+        return autoBlocks.filter { cal.isDate($0.start, inSameDayAs: day) }
+    }
+
+    /// Time in auto blocks starting in [from, to) that no manual block (or the live block) covers,
+    /// so a block timed during a chat is counted once.
+    func autoExtra(from: Date, to: Date = .distantFuture, liveSince: Date? = nil) -> TimeInterval {
+        let blocks = autoBlocks.filter { $0.start >= from && $0.start < to }
+        guard !blocks.isEmpty else { return 0 }
+        var covered = sessions.filter { $0.end > blocks[0].start }.map { ($0.start, $0.end) }
+        if let liveSince { covered.append((liveSince, Date())) }
+        return blocks.reduce(0) { $0 + Self.uncovered($1.start, $1.end, by: covered) }
+    }
+
+    private static func uncovered(_ start: Date, _ end: Date, by spans: [(Date, Date)]) -> TimeInterval {
+        var cuts = spans.filter { $0.1 > start && $0.0 < end }
+            .map { (max($0.0, start), min($0.1, end)) }
+            .sorted { $0.0 < $1.0 }
+        var covered: TimeInterval = 0
+        var cursor = start
+        while !cuts.isEmpty {
+            let c = cuts.removeFirst()
+            let a = max(c.0, cursor)
+            if c.1 > a { covered += c.1.timeIntervalSince(a); cursor = c.1 }
+        }
+        return max(0, end.timeIntervalSince(start) - covered)
+    }
+
     // MARK: Stats
 
     func dayStats() -> [Date: DayStat] {
@@ -75,6 +115,11 @@ final class SessionStore: ObservableObject {
             d.count += 1
             out[key] = d
         }
+        // Auto time beyond the manual blocks counts in Hours only (it has no intensity).
+        for key in Set(autoBlocks.map { cal.startOfDay(for: $0.start) }) {
+            let extra = autoExtra(from: key, to: cal.date(byAdding: .day, value: 1, to: key)!)
+            if extra >= 60 { out[key, default: DayStat()].autoMinutes = extra / 60 }
+        }
         return out
     }
 
@@ -84,21 +129,25 @@ final class SessionStore: ObservableObject {
         return sessions.filter { cal.isDate($0.start, inSameDayAs: day) }.sorted { $0.start < $1.start }
     }
 
-    func total(onDay day: Date) -> TimeInterval {
+    /// Manual blocks plus the auto time they don't cover. `liveSince`: a block being timed now,
+    /// so its stretch of auto time isn't counted twice.
+    func total(onDay day: Date, liveSince: Date? = nil) -> TimeInterval {
         let cal = Calendar.current
+        let start = cal.startOfDay(for: day)
         return sessions.filter { cal.isDate($0.start, inSameDayAs: day) }.reduce(0) { $0 + $1.duration }
+            + autoExtra(from: start, to: cal.date(byAdding: .day, value: 1, to: start)!, liveSince: liveSince)
     }
 
-    func total(since date: Date) -> TimeInterval {
-        sessions.filter { $0.start >= date }.reduce(0) { $0 + $1.duration }
+    func total(since date: Date, liveSince: Date? = nil) -> TimeInterval {
+        sessions.filter { $0.start >= date }.reduce(0) { $0 + $1.duration } + autoExtra(from: date, liveSince: liveSince)
     }
 
-    var totalAllTime: TimeInterval { sessions.reduce(0) { $0 + $1.duration } }
+    var totalAllTime: TimeInterval { sessions.reduce(0) { $0 + $1.duration } + autoExtra(from: .distantPast) }
 
-    /// Consecutive days with deep work, ending today (or yesterday if today has nothing yet).
+    /// Consecutive days with deep work (timed or auto), ending today (or yesterday if today has nothing yet).
     func streak() -> Int {
         let cal = Calendar.current
-        let days = Set(sessions.map { cal.startOfDay(for: $0.start) })
+        let days = Set(sessions.map { cal.startOfDay(for: $0.start) } + autoBlocks.map { cal.startOfDay(for: $0.start) })
         var day = cal.startOfDay(for: Date())
         if !days.contains(day) { day = cal.date(byAdding: .day, value: -1, to: day)! }
         var n = 0

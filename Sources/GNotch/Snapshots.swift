@@ -395,6 +395,25 @@ enum Snapshots {
                 t = t.addingTimeInterval(mins * 60 + 30 * 60)
             }
         }
+        // Auto blocks (chats, commits): evenings over the last 40 days, some on days with nothing timed.
+        let names = ["GNotch", "Umami", "Day chat", "Specialty Media", "GearsOS"]
+        var auto: [ActivityBlock] = []
+        for back in stride(from: 40, through: 0, by: -1) where back == 2 || rng.next() < 0.6 {
+            let day = cal.date(byAdding: .day, value: -back, to: today)!
+            for (hour, mins) in [(15.0, 50.0 + rng.next() * 60), (19.5, 90 + rng.next() * 150)] {
+                let start = day.addingTimeInterval(hour * 3600 + rng.next() * 1800)
+                guard start.addingTimeInterval(mins * 60) < Date() else { continue }
+                let first = Int(rng.next() * 5)
+                let count = 1 + Int(rng.next() * 3)
+                var projects: [String: Int] = [:]
+                for k in 0..<count { projects[names[(first + k) % names.count]] = 200 - 50 * k }
+                let chats: [String] = (0..<count + 1).map { "chat-\(back)-\($0)" }
+                let commits = Int(rng.next() * 4)
+                auto.append(ActivityBlock(start: start, end: start.addingTimeInterval(mins * 60),
+                                          projects: projects, commits: commits, messages: 300, chats: chats))
+            }
+        }
+        store.setAuto(auto)
     }
 }
 

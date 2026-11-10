@@ -268,6 +268,9 @@ struct CalendarGrid: View {
 struct DayCard: View {
     let day: Date
     let blocks: [DeepWorkSession]
+    var auto: [ActivityBlock] = []
+    /// Timed blocks plus the auto time they don't cover.
+    var total: TimeInterval? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -276,12 +279,14 @@ struct DayCard: View {
                 Spacer()
                 Text("W\(WeekNumber.of(day))").foregroundStyle(.secondary).monospacedDigit()
             }
-            if blocks.isEmpty {
+            if blocks.isEmpty && auto.isEmpty {
                 Text(day > Date() ? "Ahead: nothing logged yet" : "No deep work").foregroundStyle(.secondary)
             } else {
-                let total = blocks.reduce(0) { $0 + $1.duration }
-                let avg = blocks.reduce(0) { $0 + $1.minutes * Double($1.intensity) } / max(1, total / 60)
-                Text("\(Fmt.hm(total)) · \(blocks.count == 1 ? "1 block" : "\(blocks.count) blocks") · \(Intensity.label(Int(avg.rounded())))")
+                let timed = blocks.reduce(0) { $0 + $1.duration }
+                let avg = blocks.reduce(0) { $0 + $1.minutes * Double($1.intensity) } / max(1, timed / 60)
+                Text(([Fmt.hm(total ?? timed)]
+                      + (blocks.isEmpty ? [] : [blocks.count == 1 ? "1 block" : "\(blocks.count) blocks", Intensity.label(Int(avg.rounded()))])
+                      + (auto.isEmpty ? [] : ["\(Fmt.hm(auto.reduce(0) { $0 + $1.duration })) auto"])).joined(separator: " · "))
                     .foregroundStyle(.secondary)
                 ForEach(blocks.prefix(5)) { b in
                     HStack(spacing: 6) {
@@ -293,6 +298,18 @@ struct DayCard: View {
                 }
                 if blocks.count > 5 {
                     Text("+\(blocks.count - 5) more").foregroundStyle(.secondary)
+                }
+                ForEach(auto.prefix(blocks.count > 3 ? 2 : 4)) { b in
+                    HStack(spacing: 6) {
+                        Circle().strokeBorder(AutoStyle.color, lineWidth: 1.5).frame(width: 6, height: 6)
+                        Text("\(Fmt.time.string(from: b.start))–\(Fmt.time.string(from: b.end))").monospacedDigit()
+                        Text("Auto").foregroundStyle(AutoStyle.color)
+                        Text(b.label).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                let shownAuto = blocks.count > 3 ? 2 : 4
+                if auto.count > shownAuto {
+                    Text("+\(auto.count - shownAuto) more auto").foregroundStyle(.secondary)
                 }
             }
         }
@@ -317,7 +334,8 @@ extension View {
             GeometryReader { geo in
                 if let h = hover {
                     let x = min(max(0, h.point.x - 125), max(0, geo.size.width - 250))
-                    let card = DayCard(day: h.day, blocks: store.blocks(on: h.day))
+                    let card = DayCard(day: h.day, blocks: store.blocks(on: h.day), auto: store.autoBlocks(on: h.day),
+                                       total: store.total(onDay: h.day))
                     // Always above the pointer: what's above was drawn earlier, so the card covers it
                     // (below, the next section would draw over the card).
                     card.frame(height: max(0, h.point.y - 10), alignment: .bottom).offset(x: x)
@@ -431,19 +449,30 @@ struct MiniHeatmap: View {
 struct DayBrief: View {
     let day: Date
     let blocks: [DeepWorkSession]
+    var auto: [ActivityBlock] = []
+    var total: TimeInterval? = nil
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 3) {
             Text("\(Fmt.shortDay.string(from: day)) · W\(WeekNumber.of(day))").foregroundStyle(.primary)
-            if blocks.isEmpty {
+            if blocks.isEmpty && auto.isEmpty {
                 Text(day > Date() ? "Ahead" : "No deep work")
             } else {
-                Text("\(Fmt.hm(blocks.reduce(0) { $0 + $1.duration })) · \(blocks.count == 1 ? "1 block" : "\(blocks.count) blocks")")
+                let timed = blocks.reduce(0) { $0 + $1.duration }
+                Text(([Fmt.hm(total ?? timed)]
+                      + (blocks.isEmpty ? [] : [blocks.count == 1 ? "1 block" : "\(blocks.count) blocks"])
+                      + (auto.isEmpty ? [] : ["\(auto.count) auto"])).joined(separator: " · "))
                     .monospacedDigit()
                 ForEach(blocks.prefix(3)) { b in
                     HStack(spacing: 4) {
                         Text("\(Fmt.time.string(from: b.start))–\(Fmt.time.string(from: b.end))").monospacedDigit()
                         Text(Intensity.label(b.intensity)).foregroundStyle(Intensity.color(b.intensity))
+                    }
+                }
+                ForEach(auto.prefix(max(0, 3 - blocks.count))) { b in
+                    HStack(spacing: 4) {
+                        Text("\(Fmt.time.string(from: b.start))–\(Fmt.time.string(from: b.end))").monospacedDigit()
+                        Text("Auto").foregroundStyle(AutoStyle.color)
                     }
                 }
             }

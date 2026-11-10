@@ -105,7 +105,7 @@ struct IdleView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 } else if let day = hoveredDay {
-                    DayBrief(day: day, blocks: store.blocks(on: day))
+                    DayBrief(day: day, blocks: store.blocks(on: day), auto: store.autoBlocks(on: day), total: store.total(onDay: day))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 } else {

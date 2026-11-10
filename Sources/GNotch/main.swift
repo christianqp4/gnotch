@@ -12,6 +12,7 @@ MainActor.assumeIsolated {
                                            title: env["GNOTCH_EXPORT_TITLE"] ?? "prueba")
         exit(passed ? 0 : 1)
     }
+    if let file = env["GNOTCH_ACTIVITY_CHECK"] { exit(ActivityScanner.check(file: URL(fileURLWithPath: file)) ? 0 : 1) }
     if env["GNOTCH_KEEPAWAKE_CHECK"] != nil { exit(Snapshots.keepAwakeCheck() ? 0 : 1) }
     Migration.run()
     let app = NSApplication.shared

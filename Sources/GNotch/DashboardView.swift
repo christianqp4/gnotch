@@ -119,7 +119,9 @@ struct DashboardView: View {
         let filtered = selectedDay.map { day in store.sessions.filter { cal.isDate($0.start, inSameDayAs: day) } }
             ?? store.sessions
         let groups = Dictionary(grouping: filtered) { cal.startOfDay(for: $0.start) }
-            .sorted { $0.key > $1.key }
+        let autoFiltered = selectedDay.map { store.autoBlocks(on: $0) } ?? store.autoBlocks
+        let autoGroups = Dictionary(grouping: autoFiltered) { cal.startOfDay(for: $0.start) }
+        let days = Set(groups.keys).union(autoGroups.keys).sorted(by: >)
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -132,7 +134,7 @@ struct DashboardView: View {
                 Spacer()
             }
 
-            if filtered.isEmpty {
+            if filtered.isEmpty && autoFiltered.isEmpty {
                 Text(selectedDay == nil
                      ? "No blocks yet. Hover the notch and hit Start."
                      : "No deep work this day.")
@@ -141,23 +143,33 @@ struct DashboardView: View {
             }
 
             LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(groups, id: \.key) { day, sessions in
+                ForEach(days, id: \.self) { day in
+                    let sessions = groups[day] ?? []
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text(Fmt.day.string(from: day)).font(.subheadline.weight(.semibold))
                             Spacer()
-                            Text(Fmt.hm(sessions.reduce(0) { $0 + $1.duration }))
+                            Text(Fmt.hm(store.total(onDay: day)))
                                 .font(.subheadline.weight(.semibold))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
+                                .help("Timed blocks plus auto time they don't cover")
                         }
-                        ForEach(sessions) { s in
-                            SessionRow(session: s)
-                                .onTapGesture { editing = s }
-                                .contextMenu {
-                                    Button("Edit…") { editing = s }
-                                    Button("Delete", role: .destructive) { store.delete(s.id) }
-                                }
+                        // Newest first, timed and auto blocks in one order.
+                        let rows = (sessions.map { LogRow.timed($0) } + (autoGroups[day] ?? []).map { LogRow.auto($0) })
+                            .sorted { $0.start > $1.start }
+                        ForEach(rows) { row in
+                            switch row {
+                            case .auto(let b):
+                                AutoRow(block: b)
+                            case .timed(let s):
+                                SessionRow(session: s)
+                                    .onTapGesture { editing = s }
+                                    .contextMenu {
+                                        Button("Edit…") { editing = s }
+                                        Button("Delete", role: .destructive) { store.delete(s.id) }
+                                    }
+                            }
                         }
                     }
                 }
@@ -190,6 +202,38 @@ struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
+    }
+}
+
+private enum LogRow: Identifiable {
+    case timed(DeepWorkSession)
+    case auto(ActivityBlock)
+
+    var id: UUID { switch self { case .timed(let s): s.id; case .auto(let b): b.id } }
+    var start: Date { switch self { case .timed(let s): s.start; case .auto(let b): b.start } }
+}
+
+/// One auto block (chats and commits), read-only, in a single quiet line.
+struct AutoRow: View {
+    let block: ActivityBlock
+
+    var body: some View {
+        HStack(spacing: 16) {
+            HStack(spacing: 6) {
+                Text(Fmt.hm(block.duration)).font(.system(size: 13, weight: .semibold, design: .rounded))
+                Text("\(Fmt.time.string(from: block.start))–\(Fmt.time.string(from: block.end))")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .frame(width: 160, alignment: .leading)
+            Text("Auto").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(AutoStyle.color)
+            Text(block.label).font(.system(size: 12)).lineLimit(1)
+            Spacer()
+            Text(block.detail).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 10).strokeBorder(AutoStyle.color.opacity(0.35)))
+        .help("Found from chat messages and commits; gaps under 20 min joined. Not editable, never in sessions.json.")
     }
 }
 

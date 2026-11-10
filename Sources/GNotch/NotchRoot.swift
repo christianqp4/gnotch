@@ -149,8 +149,9 @@ struct NotchRootView: View {
                 Spacer(minLength: 0)
                 switch page {
                 case .timer:
-                    let today = store.total(onDay: Date())
-                        + (engine.isActive || engine.phase == .finishing ? engine.elapsed : 0)
+                    let live = engine.isActive || engine.phase == .finishing
+                    let today = store.total(onDay: Date(), liveSince: live ? engine.startDate : nil)
+                        + (live ? engine.elapsed : 0)
                     Text("Today \(Fmt.hm(today))").monospacedDigit().lineLimit(1)
                     if engine.phase != .finishing {
                         toolButton(state.large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
